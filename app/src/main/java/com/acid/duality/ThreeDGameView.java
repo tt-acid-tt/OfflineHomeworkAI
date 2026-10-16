@@ -28,7 +28,8 @@ import javax.microedition.khronos.opengles.GL10;
 public class ThreeDGameView extends GLSurfaceView {
     volatile int screen=0; // 0 menu, 1 room lobby, 2 game
     volatile int stage=0, moves=0, wood=0, scrap=0;
-    volatile boolean wreckSearched=false;
+    volatile boolean wreckSearched=false, campfireBuilt=false;
+    volatile float campfireX=0,campfireZ=0;
     volatile float sceneTime=0f;
     volatile int choiceIndex=0, peerChoice=0, resultCode=0, lastPeerResult=0;
     volatile boolean started=false, solo=false, ready=false;
@@ -69,6 +70,12 @@ public class ThreeDGameView extends GLSurfaceView {
     }
     void startOnlineGame() {
         if(lan.hosting && lan.connected) { started=true; screen=3; stage=0; ready=false; playerX=0;playerZ=0;yaw=0;pitch=0;sceneTime=0;notice="Крушение. Выживайте вместе."; }
+        hud.invalidate();
+    }
+    void craftCampfire() {
+        if(screen!=2 || campfireBuilt) return;
+        if(wood>=3 && scrap>=1) { wood-=3; scrap--; campfireBuilt=true; campfireX=playerX; campfireZ=playerZ-1.8f; notice="Костёр готов. Теперь можно пережить ночь."; }
+        else notice="Для костра нужно 3 дерева и 1 металл. Осмотри обломки и собери ветки.";
         hud.invalidate();
     }
     void backToMenu() {
@@ -170,6 +177,9 @@ public class ThreeDGameView extends GLSurfaceView {
                 text(c,"AFTERMATH  /  DAY 01",34,42,17,Color.rgb(230,231,210),true);
                 text(c,"ЦЕЛЬ: ОСМОТРИ ОБЛОМКИ САМОЛЁТА",34,68,Math.min(14,w*.018f),Color.rgb(210,174,119),true);
                 text(c,"ДЕРЕВО: "+g.wood+"     МЕТАЛЛ: "+g.scrap+"     ИЗУЧИ ОБЛОМКИ",34,91,Math.min(11,w*.014f),Color.rgb(183,195,173),false);
+                fill(c,w-275,18,w-20,76,13,g.campfireBuilt?Color.argb(185,62,75,48):Color.argb(205,104,64,36));
+                center(c,g.campfireBuilt?"КОСТЁР ПОСТРОЕН":"СОЗДАТЬ КОСТЁР",w-147,42,Math.min(15,w*.019f),Color.rgb(244,231,205),true);
+                center(c,g.campfireBuilt?"ОГОНЬ СОХРАНИТ ТЕПЛО":"3 ДЕРЕВА + 1 МЕТАЛЛ",w-147,61,Math.min(11,w*.014f),Color.rgb(226,194,150),false);
                 // Left movement stick.
                 float bx=Math.min(112,w*.12f),by=h-100;
                 p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(72,185,215,245));c.drawCircle(bx,by,62,p);
@@ -234,6 +244,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 case MotionEvent.ACTION_DOWN: {
                     if(g.screen==3){g.screen=2;g.sceneTime=8.6f;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;g.hud.invalidate();return true;}
                     int id=e.getPointerId(0); lastX=x;lastY=y;
+                    if(y<88&&x>w-300){g.craftCampfire();return true;}
                     if(g.nearInteract&&y>h-140&&x>w-220){g.interact();return true;}
                     if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
                     else {look=true;lookPointer=id;}
@@ -391,6 +402,14 @@ public class ThreeDGameView extends GLSurfaceView {
             }
             if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.38f,.4f,.32f,1}:new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.solo) remoteHero(0,-8,new float[]{.38f,.4f,.32f,1});
+            if(g.campfireBuilt){
+                box(g.campfireX,.13f,g.campfireZ,1.15f,.16f,.22f,new float[]{.24f,.16f,.09f,1});
+                box(g.campfireX,.13f,g.campfireZ,.22f,.16f,1.15f,new float[]{.24f,.16f,.09f,1});
+                float flame=.62f+(float)Math.sin(elapsed*8f)*.12f;
+                box(g.campfireX,flame,g.campfireZ,.34f,.8f,.34f,new float[]{1f,.27f,.035f,1});
+                box(g.campfireX+.12f,flame+.16f,g.campfireZ-.08f,.19f,.56f,.19f,new float[]{1f,.68f,.12f,1});
+                box(g.campfireX-.13f,flame-.08f,g.campfireZ+.08f,.16f,.45f,.16f,new float[]{.95f,.13f,.025f,1});
+            }
             GLES20.glDisableVertexAttribArray(posLoc);
         }
         void tree(float x,float z,float h,int seed){
