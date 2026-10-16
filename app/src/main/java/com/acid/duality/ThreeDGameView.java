@@ -96,10 +96,18 @@ public class ThreeDGameView extends GLSurfaceView {
                 int remoteStage=Integer.parseInt(p[3]); boolean remoteStarted=Integer.parseInt(p[4])==1;
                 peerReady=Integer.parseInt(p[5])==1; peerChoice=Integer.parseInt(p[6]); int remoteResult=Integer.parseInt(p[7]);
                 if(!lan.hosting) {
+                    boolean stageChanged=remoteStage!=stage;
                     stage=remoteStage; started=remoteStarted; if(started) screen=2;
+                    if(stageChanged) {
+                        confirmed=false; ready=false; choiceIndex=0;
+                        notice=stage>=4?"Комплекс пройден!":"Новая комната. Сопоставьте подсказки.";
+                    }
                     if(remoteResult!=lastPeerResult) {
-                        lastPeerResult=remoteResult; confirmed=false; ready=false;
-                        notice="Код не принят. Обсудите подсказки и попробуйте снова.";
+                        lastPeerResult=remoteResult;
+                        if(!stageChanged) {
+                            confirmed=false; ready=false;
+                            notice="Код не принят. Обсудите подсказки и попробуйте снова.";
+                        }
                     }
                 }
             } catch(Exception ignored) {}
@@ -152,10 +160,10 @@ public class ThreeDGameView extends GLSurfaceView {
                 String objective=g.stage==0?"СИГНАЛЬНЫЙ КОД":g.stage==1?"ЗЕРКАЛЬНЫЙ ШИФР":g.stage==2?"СХЕМА ПИТАНИЯ":"ПОСЛЕДОВАТЕЛЬНОСТЬ АВАРИИ";
                 text(c,objective,34,66,Math.min(14,w*.018f),Color.rgb(109,255,221),true);
                 String clue="";
-                if(g.stage==0) clue=g.lan.hosting||g.solo?"КАНАЛ A: 4 импульса. Введи большее значение.":"КАНАЛ B: 2 импульса. Введи меньшее значение.";
-                else if(g.stage==1) clue=g.lan.hosting||g.solo?"ДИСК B: ←. Отрази по вертикали. Таблица: ↑1 →2 ↓3 ←4.":"ТВОЙ ДИСК: ←. Введи номер по таблице ↑1 →2 ↓3 ←4.";
-                else if(g.stage==2) clue=g.lan.hosting||g.solo?"СХЕМА A: три линии под напряжением. Введи их количество.":"СХЕМА B: активен только канал A. Введи номер канала.";
-                else if(g.stage==3) clue=g.lan.hosting||g.solo?"ЖУРНАЛ: 1, 3, 2, 4. После сортировки введи последнее число.":"ЖУРНАЛ: 1, 3, 2, 4. После сортировки введи второе число.";
+                if(g.stage==0) clue=g.lan.hosting||g.solo?"КАНАЛ A: 4 импульса. Узнай B и введи БОЛЬШЕЕ из двух.":"КАНАЛ B: 2 импульса. Узнай A и введи МЕНЬШЕЕ из двух.";
+                else if(g.stage==1) clue=g.lan.hosting||g.solo?"ШИФР: символ B — ←. Отрази его по вертикали; таблица ↑1 →2 ↓3 ←4.":"ТВОЙ ДИСК: ←. Передай символ партнёру; введи номер своего символа по таблице ↑1 →2 ↓3 ←4.";
+                else if(g.stage==2) clue=g.lan.hosting||g.solo?"СХЕМА A: 3 линии горят. Уточни у B контрольный канал; введи число линий, если он нечётный.":"СХЕМА B: контрольный канал №1. Скажи A номер канала и введи номер активного канала.";
+                else if(g.stage==3) clue=g.lan.hosting||g.solo?"ЖУРНАЛ: 1, 3, 2, 4. Передай порядок B; отсортируй по возрастанию и введи последнее число.":"ПРИОРИТЕТ: после сортировки введи второй элемент. Попроси A продиктовать порядок из журнала.";
                 text(c,clue,34,92,Math.min(12,w*.016f),Color.rgb(225,235,250),true);
                 text(c,"Обсудите подсказки голосом. Консоли находятся по разным сторонам комнаты.",34,116,Math.min(11,w*.014f),Color.rgb(163,188,216),false);
                 if(!g.solo && !g.lan.connected){fill(c,w*.36f,16,w*.64f,53,12,Color.argb(210,80,30,39));center(c,"СВЯЗЬ ПОТЕРЯНА",w*.5f,39,13,Color.WHITE,true);}
