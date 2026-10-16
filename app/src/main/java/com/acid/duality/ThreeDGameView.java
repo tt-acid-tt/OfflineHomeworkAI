@@ -125,7 +125,7 @@ public class ThreeDGameView extends GLSurfaceView {
         }
     }
 
-    static class World implements Renderer {
+    static class World implements GLSurfaceView.Renderer {
         private final float[] projection=new float[16],view=new float[16],model=new float[16],mv=new float[16],mvp=new float[16];
         private int program,posLoc,colorLoc,mvpLoc,lightLoc;
         private FloatBuffer vertices;
