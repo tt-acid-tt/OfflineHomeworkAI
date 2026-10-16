@@ -93,7 +93,7 @@ public class ThreeDGameView extends GLSurfaceView {
         if(blueprintType==0){campfireBuilt=true;campfireX=bx;campfireZ=bz;}
         else if(blueprintType==5){shelterBuilt=true;shelterX=bx;shelterZ=bz;}
         blueprintMode=false; blueprintBookOpen=false;
-        notice="Постройка размещена: "+new String[]{"костёр","фундамент","стена","потолок","дверной проём","укрытие"][blueprintType]; hud.invalidate();
+        notice="Постройка размещена: "+(new String[]{"костёр","фундамент","стена","потолок","дверной проём","укрытие"})[blueprintType]; hud.invalidate();
     }
     void skipCutscene() { if(screen==3){screen=2;sceneTime=12.1f;playerX=0;playerZ=0;yaw=0;pitch=0;stickX=stickY=0;notice="Ты очнулся у места крушения. Осмотрись и выживи.";hud.invalidate();} }
     void craftCampfire() {
