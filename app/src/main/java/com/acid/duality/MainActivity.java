@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
         Socket socket; ServerSocket server; BufferedReader reader; PrintWriter writer;
         volatile boolean discoveryRunning=false; Thread beaconThread;
         boolean modalOpen=false; String modalTitle="",modalMessage=""; ArrayList<String> modalOptions=new ArrayList<>(); ArrayList<Runnable> modalActions=new ArrayList<>();
+        boolean soloBlue=false, joystickActive=false, leverLeft=false, leverRight=false; float stickX=0,stickY=0; long lastStickMove=0;
         BluetoothAdapter bt; BluetoothSocket btSocket; BluetoothServerSocket btServer;
         WifiManager.MulticastLock wifiMulticastLock;
         final UUID BT_UUID=UUID.fromString("b6a8a2d1-63ab-4ec3-b4c9-4c6c9b210101");
@@ -195,13 +196,15 @@ public class MainActivity extends Activity {
             button("down","↓",gx+sz+6,gy,sz,sz,BLUE,false);
             button("right","→",gx+2*(sz+6),gy,sz,sz,BLUE,false);
             button("action","ДЕЙСТВИЕ",w*.72f,h*.76f,w*.20f,h*.09f,MINT,true);
+            if(soloMode){button("switchPlayer",soloBlue?"ИГРОК: СИНИЙ  ↔":"ИГРОК: КРАСНЫЙ  ↔",w*.66f,h*.06f,w*.22f,h*.09f,GOLD,false);}
             button("exit","Ⅱ",w*.91f,h*.06f,w*.055f,h*.09f,WHITE,false);
+            drawJoystick(w,h);
             text("ХОДЫ "+moves,w*.43f,h*.92f,12,MUTED,true);
             text("ЦЕЛЬ: "+goalText(),w*.42f,h*.98f,13,GOLD,true);
             if(room==2 && !pathHint) center(red?"ТЫ ВИДИШЬ МОСТ — ВЕДИ СИНЕГО":"ПУТЬ НЕ ВИДЕН • СЛУШАЙ НАПАРНИКА",w*.55f,h*.25f,14,GOLD,true);
             if(doorOpen) center("ДВЕРЬ ОТКРЫТА — НАЖМИ «ДЕЙСТВИЕ»",w*.55f,h*.31f,15,MINT,true);
         }
-        String goalText(){switch(room){case 0:return "ОБА НАЖМИТЕ НА ПЛИТЫ";case 1:return "ВВЕДИ КОД НА СТЕНЕ";case 2:return "ПРОЙДИТЕ МОСТ ВМЕСТЕ";case 3:return "НАЙДИТЕ ДВЕ РЫЧАГА";case 4:return "ВСТАНЬТЕ НА ДВЕ ПЛИТЫ";default:return "ОТКРОЙТЕ ВЫХОД ВМЕСТЕ";}}
+        String goalText(){switch(room){case 0:return "ПОСТАВЬ КРАСНОГО И СИНЕГО НА ПЛИТЫ";case 1:return "ПОДСКАЗКА НА СТЕНЕ: КОД 417";case 2:return "ВКЛЮЧИ СКАНЕР И ПРОЙДИ ПО МОСТУ";case 3:return "АКТИВИРУЙ ОБА РЫЧАГА ПО КРАЯМ";case 4:return "ОДИН ПЕРСОНАЖ НА КАЖДУЮ ПЛИТУ";default:return "ПРИВЕДИ ОБОИХ К ЦЕНТРАЛЬНОМУ ВЫХОДУ";}}
         void drawPlatform(float cx,float top,float width,float height){
             Path floor=new Path();floor.moveTo(cx-width*.48f,top+height*.44f);floor.lineTo(cx,top);floor.lineTo(cx+width*.48f,top+height*.44f);floor.lineTo(cx,top+height);floor.close();
             p.setShader(new LinearGradient(cx-width/2,top,cx+width/2,top+height,Color.rgb(31,53,78),Color.rgb(14,23,41),Shader.TileMode.CLAMP));c.drawPath(floor,p);p.setShader(null);
@@ -221,15 +224,27 @@ public class MainActivity extends Activity {
             float doorX=(l+r)/2, doorY=t+(b-t)*.24f;
             rect(doorX-(r-l)*.075f,doorY,doorX+(r-l)*.075f,t+(b-t)*.59f,8,doorOpen?Color.rgb(31,95,84):Color.rgb(8,13,24));
             stroke(doorX-(r-l)*.075f,doorY,doorX+(r-l)*.075f,t+(b-t)*.59f,8,doorOpen?MINT:BLUE,3);
-            if(room==1){rect(l+(r-l)*.12f,t+(b-t)*.25f,l+(r-l)*.34f,t+(b-t)*.40f,10,Color.rgb(7,16,28));stroke(l+(r-l)*.12f,t+(b-t)*.25f,l+(r-l)*.34f,t+(b-t)*.40f,10,GOLD,2);center("4  1  7",l+(r-l)*.23f,t+(b-t)*.34f,18,GOLD,true);}
-            if(room==2){for(int i=0;i<5;i++){float xx=l+(r-l)*(.30f+i*.09f);float yy=t+(b-t)*(.62f+i*.055f);if(red||pathHint)rect(xx,yy,xx+(r-l)*.055f,yy+14,4,Color.argb(210,96,255,210));}}
-            if(room==3){rect(l+(r-l)*.12f,t+(b-t)*.30f,l+(r-l)*.18f,t+(b-t)*.43f,5,GOLD);rect(r-(r-l)*.18f,t+(b-t)*.30f,r-(r-l)*.12f,t+(b-t)*.43f,5,BLUE);}
-            if(room==4){rect(l+(r-l)*.22f,t+(b-t)*.70f,l+(r-l)*.34f,t+(b-t)*.76f,5,RED);rect(r-(r-l)*.34f,t+(b-t)*.70f,r-(r-l)*.22f,t+(b-t)*.76f,5,BLUE);}
+            if(room==0||room==4){drawCube3D(l+(r-l)*.285f,t+(b-t)*.77f,(r-l)*.105f,14,9,RED);drawCube3D(l+(r-l)*.715f,t+(b-t)*.77f,(r-l)*.105f,14,9,BLUE);center("A",l+(r-l)*.285f,t+(b-t)*.77f+3,11,WHITE,true);center("B",l+(r-l)*.715f,t+(b-t)*.77f+3,11,WHITE,true);}
+            if(room==1){drawCube3D(l+(r-l)*.23f,t+(b-t)*.42f,(r-l)*.20f,12,23,GOLD);center("4  1  7",l+(r-l)*.23f,t+(b-t)*.36f,18,GOLD,true);}
+            if(room==2){for(int i=0;i<5;i++){float xx=l+(r-l)*(.30f+i*.09f);float yy=t+(b-t)*(.62f+i*.055f);drawCube3D(xx,yy,(r-l)*.045f,8,5,(pathHint||i==0)?MINT:Color.rgb(70,91,119));if(pathHint)center(""+(i+1),xx,yy-7,9,WHITE,true);}}
+            if(room==3){drawCube3D(l+(r-l)*.16f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverLeft?MINT:GOLD);drawCube3D(r-(r-l)*.16f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverRight?MINT:BLUE);}
+            if(room==5){drawCube3D((l+r)/2,t+(b-t)*.58f,(r-l)*.16f,18,36,doorOpen?MINT:BLUE);}
             float ax=l+(r-l)*(.22f+px*.54f), ay=t+(b-t)*(.58f+py*.25f);
             float bx=l+(r-l)*(.22f+ox*.54f), by=t+(b-t)*(.58f+oy*.25f);
             drawCharacter(ax,ay,red?RED:BLUE,(float)Math.sin(anim*2)*2,true);
             drawCharacter(bx,by,red?BLUE:RED,(float)Math.cos(anim*2)*2,connected||soloMode);
             if(room==2&&!red&&!pathHint){rect(l+(r-l)*.27f,t+(b-t)*.60f,r-(r-l)*.27f,b,0,Color.argb(90,5,8,15));}
+        }
+        void drawCube3D(float cx,float baseY,float width,float depth,float height,int color){
+            float half=width*.5f, dep=depth*.55f;float ax=cx-half, bx=cx, cx2=cx+half;
+            p.setColor(Color.argb(70,0,0,0));c.drawOval(cx-half*.9f,baseY-2,cx+half*.9f,baseY+depth*.6f,p);
+            Path top=new Path();top.moveTo(ax,baseY-height-dep);top.lineTo(bx,baseY-height-depth);top.lineTo(cx2,baseY-height-dep);top.lineTo(bx,baseY-height);top.close();
+            p.setShader(new LinearGradient(ax,baseY-height-depth,cx2,baseY-height,brighten(color),color,Shader.TileMode.CLAMP));c.drawPath(top,p);p.setShader(null);
+            Path left=new Path();left.moveTo(ax,baseY-height-dep);left.lineTo(bx,baseY-height);left.lineTo(bx,baseY);left.lineTo(ax,baseY-dep);left.close();
+            p.setShader(new LinearGradient(ax,baseY-height-dep,bx,baseY,Color.rgb(Math.max(0,Color.red(color)-48),Math.max(0,Color.green(color)-48),Math.max(0,Color.blue(color)-48)),color,Shader.TileMode.CLAMP));c.drawPath(left,p);p.setShader(null);
+            Path right=new Path();right.moveTo(bx,baseY-height);right.lineTo(cx2,baseY-height-dep);right.lineTo(cx2,baseY-dep);right.lineTo(bx,baseY);right.close();
+            p.setShader(new LinearGradient(bx,baseY-height,cx2,baseY,Color.rgb(Math.max(0,Color.red(color)-72),Math.max(0,Color.green(color)-72),Math.max(0,Color.blue(color)-72)),Color.rgb(Math.max(0,Color.red(color)-25),Math.max(0,Color.green(color)-25),Math.max(0,Color.blue(color)-25)),Shader.TileMode.CLAMP));c.drawPath(right,p);p.setShader(null);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.2f);p.setColor(Color.argb(190,220,242,255));c.drawPath(top,p);p.setStyle(Paint.Style.FILL);
         }
         // Full humanoid characters with layered clothing, hair, seams and fine fabric texture.
         void drawPuzzleBackdrop(float w,float h,boolean prominent){
@@ -330,18 +345,37 @@ public class MainActivity extends Activity {
         int brighten(int color){return Color.rgb(Math.min(255,Color.red(color)+35),Math.min(255,Color.green(color)+35),Math.min(255,Color.blue(color)+35));}
         void drawPlatform(float x,float y,float w,float h,boolean ignored){drawPlatform(x,y,w,h);}
         @Override public boolean onTouchEvent(android.view.MotionEvent e){
-            if(e.getAction()!=MotionEvent.ACTION_UP)return true;
             float x=e.getX(),y=e.getY();
+            if(e.getAction()==MotionEvent.ACTION_DOWN && !modalOpen && !showSettings && screen==3 && x<getWidth()*.34f && y>getHeight()*.60f){joystickActive=true;updateJoystick(x,y);lastStickMove=0;performJoystickMove();invalidate();return true;}
+            if(e.getAction()==MotionEvent.ACTION_MOVE && joystickActive){updateJoystick(x,y);performJoystickMove();invalidate();return true;}
+            if(e.getAction()==MotionEvent.ACTION_CANCEL){joystickActive=false;stickX=stickY=0;invalidate();return true;}
+            if(e.getAction()!=MotionEvent.ACTION_UP)return true;
+            if(joystickActive){updateJoystick(x,y);joystickActive=false;stickX=stickY=0;invalidate();return true;}
             if(modalOpen){handleModalTouch(x,y);return true;}
             if(showSettings){showSettings=false;invalidate();return true;}
             for(Map.Entry<String,RectF> entry:buttons.entrySet())if(entry.getValue().contains(x,y)){click(entry.getKey());return true;}
             if(screen==3){if(x<getWidth()*.5f){if(y>getHeight()*.60f){px=Math.max(.03f,Math.min(.95f,px+(x<getWidth()*.25f?-.06f:.06f)));moves++;sendState();}else{py=Math.max(.05f,py-.07f);moves++;sendState();}}else if(y>getHeight()*.58f){ox=Math.max(.03f,Math.min(.95f,ox+(x<getWidth()*.75f?-.05f:.05f)));moves++;sendState();}invalidate();}
             return true;
         }
+        void drawJoystick(float w,float h){
+            float cx=w*.145f,cy=h*.815f,r=Math.min(w*.105f,h*.17f);
+            p.setColor(Color.argb(115,10,18,33));c.drawCircle(cx,cy,r+7,p);
+            p.setColor(Color.argb(185,24,39,62));c.drawCircle(cx,cy,r,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(Color.argb(180,101,145,191));c.drawCircle(cx,cy,r,p);p.setStyle(Paint.Style.FILL);
+            c.drawLine(cx-r*.63f,cy,cx+r*.63f,cy,p);c.drawLine(cx,cy-r*.63f,cx,cy+r*.63f,p);
+            float kx=cx+stickX*r*.63f,ky=cy+stickY*r*.63f;
+            p.setShader(new LinearGradient(kx-r*.36f,ky-r*.36f,kx+r*.36f,ky+r*.36f,Color.rgb(101,230,221),Color.rgb(43,120,190),Shader.TileMode.CLAMP));c.drawCircle(kx,ky,r*.36f,p);p.setShader(null);
+            center("ДВИЖЕНИЕ",cx,cy+r+20,Math.min(12,w*.016f),WHITE,true);
+        }
+        void updateJoystick(float x,float y){float cx=getWidth()*.145f,cy=getHeight()*.815f,r=Math.min(getWidth()*.105f,getHeight()*.17f);stickX=Math.max(-1,Math.min(1,(x-cx)/r));stickY=Math.max(-1,Math.min(1,(y-cy)/r));}
+        void performJoystickMove(){long now=System.currentTimeMillis();if(now-lastStickMove<145)return;float dx=Math.abs(stickX)>.30f?(stickX>0?.055f:-.055f):0;float dy=Math.abs(stickY)>.30f?(stickY>0?.055f:-.055f):0;if(dx==0&&dy==0)return;movePlayer(dx,dy);lastStickMove=now;}
+        void movePlayer(float dx,float dy){if(soloMode&&soloBlue){ox=Math.max(.03f,Math.min(.97f,ox+dx));oy=Math.max(.05f,Math.min(.95f,oy+dy));}else{px=Math.max(.03f,Math.min(.97f,px+dx));py=Math.max(.05f,Math.min(.95f,py+dy));}moves++;if(!soloMode)sendState();}
+        boolean playersOnPlates(){return px<.20f&&ox>.80f;}
         void click(String id){
             switch(id){
                 case "play":soloMode=false;screen=1;break;
-                case "solo":closeNetwork();soloMode=true;connected=false;host=false;started=true;screen=3;room=0;progress=0;moves=0;doorOpen=false;pathHint=false;px=.18f;py=.65f;ox=.78f;oy=.65f;red=true;break;
+                case "solo":closeNetwork();soloMode=true;connected=false;host=false;started=true;screen=3;room=0;progress=0;moves=0;doorOpen=false;pathHint=false;leverLeft=false;leverRight=false;soloBlue=false;px=.5f;py=.5f;ox=.5f;oy=.5f;red=true;break;
+                case "switchPlayer":soloBlue=!soloBlue;break;
                 case "settings":showSettings=true;break;
                 case "how":showPopup("КАК ИГРАТЬ","Красный и синий игроки видят разные подсказки. Обменивайтесь информацией, двигайтесь кнопками и нажимайте ДЕЙСТВИЕ у механизмов. Пройдите шесть комнат вместе.",new String[]{"ПОНЯТНО"},()->{});break;
                 case "back":if(screen==2){closeNetwork();screen=1;}else screen=0;break;
@@ -350,10 +384,10 @@ public class MainActivity extends Activity {
                 case "settingsBack":showSettings=false;break;
                 case "color":red=!red;send("COLOR,"+(red?"RED":"BLUE"));break;
                 case "start":if(host&&connected){started=true;screen=3;room=0;progress=0;doorOpen=false;send("START");}else toast("Сначала дождитесь второго игрока");break;
-                case "left":px=Math.max(.03f,px-.05f);moves++;sendState();break;
-                case "right":px=Math.min(.95f,px+.05f);moves++;sendState();break;
-                case "up":py=Math.max(.05f,py-.06f);moves++;sendState();break;
-                case "down":py=Math.min(.95f,py+.06f);moves++;sendState();break;
+                case "left":movePlayer(-.06f,0);break;
+                case "right":movePlayer(.06f,0);break;
+                case "up":movePlayer(0,-.06f);break;
+                case "down":movePlayer(0,.06f);break;
                 case "action":doAction();break;
                 case "exit":showPopup("ПОКИНУТЬ КОМНАТУ?","Прогресс текущей сессии будет остановлен.",new String[]{"ОСТАТЬСЯ","ВЫЙТИ"},()->{},()->{closeNetwork();soloMode=false;screen=0;});break;
             }
@@ -480,21 +514,24 @@ public class MainActivity extends Activity {
                 else if(a[0].equals("POS")&&a.length>=7){ox=Float.parseFloat(a[1]);oy=Float.parseFloat(a[2]);px=Float.parseFloat(a[3]);py=Float.parseFloat(a[4]);room=Integer.parseInt(a[5]);moves=Integer.parseInt(a[6]);}
                 else if(a[0].equals("ROOM")){room=Integer.parseInt(a[1]);doorOpen=false;progress=0;}
                 else if(a[0].equals("DOOR")){doorOpen=true;}
+                else if(a[0].equals("LEVER")&&a.length>1){if(a[1].equals("L"))leverLeft=true;else if(a[1].equals("R"))leverRight=true;}
             }catch(Exception ignored){}
             invalidate();
         }
         void doAction(){
-            if(soloMode){
-                if(room==1){showPopup("ПАНЕЛЬ ДОСТУПА","На стене подсказка: 4 — 1 — 7. Нажмите «ОТКРЫТЬ», чтобы проверить код.",new String[]{"ОТМЕНА","ОТКРЫТЬ"},()->{},()->{doorOpen=true;advanceRoom();});return;}
-                doorOpen=true;
-            }else if(room==0){progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
-            else if(room==1){showPopup("ПАНЕЛЬ ДОСТУПА","На стене подсказка: 4 — 1 — 7. Нажмите «ОТКРЫТЬ», чтобы проверить код.",new String[]{"ОТМЕНА","ОТКРЫТЬ"},()->{},()->{doorOpen=true;send("DOOR");invalidate();});return;}
-            else if(room==2){pathHint=!pathHint;progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
-            else {progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
-            if(doorOpen){if(soloMode){advanceRoom();return;}room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;send("ROOM,"+room);if(room==rooms.length-1)toast("Финальная комната — найдите общий выход!");}
+            if(room==0||room==4){
+                if(playersOnPlates()){completePuzzleRoom();}
+                else showPopup("ПЛИТЫ НЕ АКТИВИРОВАНЫ","Поставь красного персонажа на левую плиту, синего — на правую. В одиночном режиме переключай персонажа кнопкой сверху.",new String[]{"ПОНЯТНО"},()->{});
+                return;
+            }
+            if(room==1){showPopup("КЛАВИАТУРА ДОСТУПА","На стене записана последовательность 4 → 1 → 7. Выбери код, который совпадает с подсказкой.",new String[]{"417","471","147","ОТМЕНА"},()->completePuzzleRoom(),()->showPopup("НЕВЕРНЫЙ КОД","Порядок цифр не совпал с подсказкой на стене. Попробуй ещё раз.",new String[]{"ПОВТОРИТЬ"},()->doAction()),()->showPopup("НЕВЕРНЫЙ КОД","Порядок цифр не совпал с подсказкой на стене. Попробуй ещё раз.",new String[]{"ПОВТОРИТЬ"},()->doAction()),()->{});return;}
+            if(room==2){if(!pathHint){pathHint=true;showPopup("СКАНЕР ВКЛЮЧЁН","Бирюзовые плитки показывают безопасный путь. Иди по ним к дальней стороне комнаты, затем нажми «ДЕЙСТВИЕ».",new String[]{"ПОНЯТНО"},()->{});}else if((soloBlue?ox:px)>.78f){completePuzzleRoom();}else showPopup("ПУТЬ ЕЩЁ НЕ ПРОЙДЕН","Двигайся вправо по подсвеченным плиткам до конца моста.",new String[]{"ПОНЯТНО"},()->{});return;}
+            if(room==3){float activeX=soloBlue?ox:px; if(activeX<.28f){leverLeft=true;send("LEVER,L");}else if(activeX>.72f){leverRight=true;send("LEVER,R");}else{showPopup("РЫЧАГИ","Подойди к одному из двух рычагов у края комнаты и нажми «ДЕЙСТВИЕ». Затем активируй второй.",new String[]{"ПОНЯТНО"},()->{});return;}if(leverLeft&&leverRight)completePuzzleRoom();else showPopup("РЫЧАГ АКТИВИРОВАН",leverLeft?"Левый рычаг включён. Теперь доберись до правого.":"Правый рычаг включён. Теперь доберись до левого.",new String[]{"ПРОДОЛЖИТЬ"},()->{});return;}
+            if(room==5){if(Math.abs(px-.5f)<.17f&&Math.abs(ox-.5f)<.17f){showPopup("ВЫХОД ОТКРЫТ","Оба персонажа добрались до выхода. Тестовое прохождение завершено!",new String[]{"В МЕНЮ"},()->{closeNetwork();soloMode=false;screen=0;});}else showPopup("СОБЕРИТЕСЬ У ВЫХОДА","Приведи обоих персонажей к центральной двери. В одиночном режиме переключай персонажа кнопкой сверху.",new String[]{"ПОНЯТНО"},()->{});return;}
             invalidate();
         }
-        void advanceRoom(){room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;pathHint=false;if(room==rooms.length-1)toast(soloMode?"Последняя комната — тестируй финальную головоломку!":"Финальная комната — найдите общий выход!");invalidate();}
+        void completePuzzleRoom(){if(soloMode){advanceRoom();return;}room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;pathHint=false;leverLeft=false;leverRight=false;send("ROOM,"+room);invalidate();}
+        void advanceRoom(){room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;pathHint=false;leverLeft=false;leverRight=false;if(room==rooms.length-1)toast("Последняя комната — найди выход вместе с двумя персонажами!");invalidate();}
         String wifiIpAddress(){try{WifiManager wm=(WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);if(wm!=null){int v=wm.getConnectionInfo().getIpAddress();if(v!=0)return String.format(Locale.US,"%d.%d.%d.%d",v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255);}}catch(Exception ignored){}return localIp();}
         String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}
         void showDirectIpDialog(){EditText field=new EditText(MainActivity.this);field.setSingleLine(true);field.setInputType(android.text.InputType.TYPE_CLASS_PHONE);field.setHint("192.168.1.25");new AlertDialog.Builder(MainActivity.this).setTitle("IP-АДРЕС ХОСТА").setMessage("На телефоне, где создано лобби, посмотри IP на экране комнаты и введи его сюда. Оба телефона должны быть в одной Wi-Fi сети.").setView(field).setNegativeButton("ОТМЕНА",(d,w)->{}).setPositiveButton("ПОДКЛЮЧИТЬСЯ",(d,w)->{String address=field.getText().toString().trim();if(address.isEmpty()){toast("Введи IP-адрес телефона-хоста");return;}connectToLobby(address);}).show();}
