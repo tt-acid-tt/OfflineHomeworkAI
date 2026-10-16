@@ -266,8 +266,9 @@ public class ThreeDGameView extends GLSurfaceView {
                     if(g.screen==3){g.skipHold=true;g.skipHoldStart=SystemClock.uptimeMillis();return true;}
                     int id=e.getPointerId(0); lastX=x;lastY=y;
                     if(y<80&&x>w-300){g.craftCampfire();return true;}
-                    if(y>=82&&y<150&&x>w-300){if(g.blueprintMode)g.placeBlueprint();else {g.blueprintMode=true;g.notice="Выбери место для чертежа и нажми кнопку ещё раз.";g.hud.invalidate();}return true;}
+                    if(y>=82&&y<150&&x>w-300){if(g.blueprintMode)g.placeBlueprint();else {g.blueprintMode=true;g.notice="Чертёж выбран: коснись места в мире, чтобы поставить укрытие.";g.hud.invalidate();}return true;}
                     if(g.nearInteract&&y>h-140&&x>w-220){g.interact();return true;}
+                    if(g.blueprintMode && y>150 && !(x<w*.27f&&y>h*.55f)){g.placeBlueprint();return true;}
                     if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
                     else {look=true;lookPointer=id;}
                     return true;
@@ -417,6 +418,7 @@ public class ThreeDGameView extends GLSurfaceView {
             }
             if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.38f,.4f,.32f,1}:new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.solo) remoteHero(0,-8,new float[]{.38f,.4f,.32f,1});
+            if(g.blueprintMode && !g.shelterBuilt){float bx=g.playerX+(float)Math.sin(g.yaw)*3.0f,bz=g.playerZ-(float)Math.cos(g.yaw)*3.0f;float[] guide=new float[]{.12f,.95f,.82f,1};box(bx,1.0f,bz-1.0f,2.8f,.07f,.07f,guide);box(bx-1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx+1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx,2.0f,bz,3.0f,.07f,2.2f,guide);}
             if(g.shelterBuilt){float sx=g.shelterX,sz=g.shelterZ;float[] wc=new float[]{.31f,.22f,.13f,1};box(sx,1.0f,sz-1.0f,2.8f,1.9f,.16f,wc);box(sx-1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx+1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx,2.0f,sz,3.0f,.16f,2.2f,new float[]{.23f,.18f,.12f,1});}
             if(g.campfireBuilt){
                 box(g.campfireX,.13f,g.campfireZ,1.15f,.16f,.22f,new float[]{.24f,.16f,.09f,1});
@@ -432,19 +434,19 @@ public class ThreeDGameView extends GLSurfaceView {
             int idx=seed<36?seed:seed-90+36;if(idx<0||idx>=g.treeHits.length)idx=Math.abs(seed)%g.treeHits.length;int hits=g.treeHits[idx];float trunk=.28f+(seed%3)*.07f;
             if(hits>=3){box(x,.17f,z,trunk*1.8f,.32f,trunk*1.8f,new float[]{.31f,.23f,.14f,1});box(x+.8f,.22f,z-.25f,2.0f,.24f,.34f,new float[]{.29f,.20f,.12f,1});box(x+1.35f,.2f,z-.3f,.45f,.22f,.28f,new float[]{.34f,.25f,.15f,1});return;}
             float trunkH=h*.9f*(hits==2?.8f:1f);box(x,trunkH*.47f,z,trunk,trunkH,trunk,new float[]{.25f,.18f,.11f,1});float green=.19f+(seed%4)*.025f-(hits*.025f);
-            box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});
+            box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});box(x,h*1.34f,z+.04f,1.05f,.78f,1.08f,new float[]{green*.78f,.24f,.13f,1});box(x-.22f,h*.79f,z+.34f,.92f,.62f,.96f,new float[]{green*.88f,.27f,.14f,1});
         }
         int findNearTree(float x,float z){
             for(int i=0;i<36;i++){
                 float tz=5f-(i/5)*6.1f;
                 float tx=-25f+(i%5)*12.3f+((i%2)*1.8f);
                 if(Math.abs(tx)<4.5f && tz>-18) tx+=tx<0?-5.5f:5.5f;
-                if(Math.abs(x-tx)<1.7f && Math.abs(z-tz)<1.7f) return i;
+                if(Math.abs(x-tx)<1.7f && Math.abs(z-tz)<1.7f && g.treeHits[i]<4) return i;
             }
             for(int i=0;i<18;i++){
                 float tz=3f-i*4.4f;
                 float tx=(i%2==0?-1:1)*(5.2f+(i%4)*1.3f);
-                if(Math.abs(x-tx)<1.5f && Math.abs(z-tz)<1.5f) return 36+i;
+                if(Math.abs(x-tx)<1.5f && Math.abs(z-tz)<1.5f && g.treeHits[36+i]<4) return 36+i;
             }
             return -1;
         }
