@@ -96,7 +96,7 @@ public class ThreeDGameView extends GLSurfaceView {
 
     static class Hud extends View {
         final ThreeDGameView g; final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-        float sx,sy,lastX,lastY; boolean stick=false,look=false; int lookPointer=-1;
+        float sx,sy,lastX,lastY; boolean stick=false,look=false; int stickPointer=-1,lookPointer=-1;
         Hud(Context c,ThreeDGameView game){super(c);g=game;setLayerType(View.LAYER_TYPE_SOFTWARE,null);setFocusable(true);}
         void fill(Canvas c,float l,float t,float r,float b,float rad,int col){p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(col);c.drawRoundRect(l,t,r,b,rad,rad,p);}
         void stroke(Canvas c,float l,float t,float r,float b,float rad,int col,float sw){p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sw);p.setColor(col);c.drawRoundRect(l,t,r,b,rad,rad,p);p.setStyle(Paint.Style.FILL);}
@@ -191,18 +191,35 @@ public class ThreeDGameView extends GLSurfaceView {
                 }return true;
             }
             switch(e.getActionMasked()){
-                case MotionEvent.ACTION_DOWN:
-                    lastX=x;lastY=y;
+                case MotionEvent.ACTION_DOWN: {
+                    int id=e.getPointerId(0); lastX=x;lastY=y;
                     if(g.nearInteract&&x>w*.68f&&y>h*.72f){g.interact();return true;}
                     if(g.stage>=3&&x>w*.40f&&x<w*.60f&&y>h*.52f&&y<h*.70f){g.beginSolo();return true;}
-                    if(x<w*.27f&&y>h*.55f){stick=true;updateStick(x,y,w,h);return true;}
-                    look=true;lookPointer=e.getPointerId(e.getActionIndex());return true;
-                case MotionEvent.ACTION_MOVE:
-                    if(stick)updateStick(x,y,w,h);
-                    else if(look){float dx=x-lastX,dy=y-lastY;g.yaw-=dx*.006f;g.pitch=Math.max(-0.72f,Math.min(0.72f,g.pitch+dy*.0045f));lastX=x;lastY=y;}
+                    if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
+                    else {look=true;lookPointer=id;}
                     return true;
+                }
+                case MotionEvent.ACTION_POINTER_DOWN: {
+                    int i=e.getActionIndex(),id=e.getPointerId(i);float tx=e.getX(i),ty=e.getY(i);
+                    if(!stick && tx<w*.27f && ty>h*.55f){stick=true;stickPointer=id;updateStick(tx,ty,w,h);}
+                    else if(!look && tx>w*.30f){look=true;lookPointer=id;lastX=tx;lastY=ty;}
+                    return true;
+                }
+                case MotionEvent.ACTION_MOVE:
+                    for(int i=0;i<e.getPointerCount();i++){
+                        int id=e.getPointerId(i);float tx=e.getX(i),ty=e.getY(i);
+                        if(stick&&id==stickPointer)updateStick(tx,ty,w,h);
+                        if(look&&id==lookPointer){float dx=tx-lastX,dy=ty-lastY;g.yaw-=dx*.006f;g.pitch=Math.max(-0.72f,Math.min(0.72f,g.pitch+dy*.0045f));lastX=tx;lastY=ty;}
+                    }
+                    return true;
+                case MotionEvent.ACTION_POINTER_UP: {
+                    int id=e.getPointerId(e.getActionIndex());
+                    if(id==stickPointer){stick=false;stickPointer=-1;g.stickX=g.stickY=0;}
+                    if(id==lookPointer){look=false;lookPointer=-1;}
+                    return true;
+                }
                 case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
-                    stick=false;look=false;g.stickX=g.stickY=0;return true;
+                    stick=false;look=false;stickPointer=lookPointer=-1;g.stickX=g.stickY=0;return true;
             }
             return true;
         }
@@ -245,7 +262,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 px+= (rightX*sx+forwardX*sy)*speed; pz+=(rightZ*sx+forwardZ*sy)*speed;
                 px=Math.max(-4.3f,Math.min(4.3f,px));pz=Math.max(-38f,Math.min(2f,pz));
                 g.playerX=px;g.playerZ=pz;g.packetTick();
-                if(g.solo){g.peerX=px<0?2.0f:-2.0f;g.peerZ=g.stage==0?-7:g.stage==1?-18:-30;g.peerReady=g.stage==2;}
+                if(g.solo){g.peerX=px<0?2.0f:-2.0f;g.peerZ=g.stage==0?-7:g.stage==1?-18:-30;g.peerReady=g.stage==2;if(g.stage==0&&Math.abs(g.playerZ+7)<1.0f&&Math.abs(g.playerX)>1.2f){g.stage=1;g.ready=false;g.notice="Шлюз 1 открыт. Идите к консоли."; }else if(g.stage==1&&g.ready){g.stage=2;g.ready=false;g.notice="Шлюз 2 открыт. Активируйте панель."; }else if(g.stage==2&&g.ready){g.stage=3;g.notice="Отлично! Вы прошли тренировку.";}}
                 if(!g.solo&&g.lan.hosting&&g.lan.connected) updateHostPuzzle();
                 if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* host publishes authoritative stage in each packet */ }
                 g.nearInteract=nearConsole(px,pz,g.stage);
