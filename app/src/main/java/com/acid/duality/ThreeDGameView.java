@@ -86,7 +86,7 @@ public class ThreeDGameView extends GLSurfaceView {
     void placeBlueprint() {
         if(screen!=2 || !blueprintMode) return;
         int[] needWood={3,4,3,2,6,8}; int[] needScrap={1,1,1,0,2,3};
-        if(wood<needWood[blueprintType] || scrap<needScrap[blueprintType]) { notice="Не хватает ресурсов для: "+new String[]{"костра","фундамента","стены","потолка","дверного проёма","укрытия"][blueprintType]; hud.invalidate(); return; }
+        if(wood<needWood[blueprintType] || scrap<needScrap[blueprintType]) { notice="Не хватает ресурсов для: "+(new String[]{"костра","фундамента","стены","потолка","дверного проёма","укрытия"})[blueprintType]; hud.invalidate(); return; }
         wood-=needWood[blueprintType]; scrap-=needScrap[blueprintType];
         float bx=playerX+(float)Math.sin(yaw)*3.0f,bz=playerZ-(float)Math.cos(yaw)*3.0f;
         builtTypes[blueprintType]=true;buildX[blueprintType]=bx;buildZ[blueprintType]=bz;
