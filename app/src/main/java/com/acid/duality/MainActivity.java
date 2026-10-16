@@ -10,6 +10,7 @@ import android.bluetooth.*;
 import android.widget.*;
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.UUID;
@@ -36,6 +37,7 @@ public class MainActivity extends Activity {
         boolean host=false, connected=false, started=false, red=true, showSettings=false;
         String status="СОЗДАЙТЕ ЛОББИ ИЛИ ПОДКЛЮЧИТЕСЬ", ip="", roomName="ЗАЛ СИГНАЛОВ";
         Socket socket; ServerSocket server; BufferedReader reader; PrintWriter writer;
+        volatile boolean discoveryRunning=false; Thread beaconThread;
         BluetoothAdapter bt; BluetoothSocket btSocket; BluetoothServerSocket btServer;
         final UUID BT_UUID=UUID.fromString("b6a8a2d1-63ab-4ec3-b4c9-4c6c9b210101");
         Thread netThread;
@@ -104,10 +106,10 @@ public class MainActivity extends Activity {
             center("КАК ВЫ БУДЕТЕ ИГРАТЬ?",w/2,h*.22f,Math.min(31,w*.04f),WHITE,true);
             center("Выберите способ соединить два устройства",w/2,h*.29f,17,MUTED,false);
             rect(w*.15f,h*.37f,w*.47f,h*.74f,22,PANEL);stroke(w*.15f,h*.37f,w*.47f,h*.74f,22,BLUE,2);
-            center("⌁",w*.31f,h*.51f,45,BLUE,true);center("ОДНА WI-FI СЕТЬ",w*.31f,h*.59f,21,WHITE,true);center("По локальной сети",w*.31f,h*.64f,15,MUTED,false);
+            center("⌁",w*.31f,h*.51f,45,BLUE,true);center("ОДНА WI-FI СЕТЬ",w*.31f,h*.59f,21,WHITE,true);center("Лобби появятся в списке",w*.31f,h*.64f,15,MUTED,false);
             button("wifi","ВЫБРАТЬ",w*.21f,h*.665f,w*.20f,h*.055f,BLUE,true);
             rect(w*.53f,h*.37f,w*.85f,h*.74f,22,PANEL);stroke(w*.53f,h*.37f,w*.85f,h*.74f,22,RED,2);
-            center("⌁",w*.69f,h*.51f,45,RED,true);center("BLUETOOTH",w*.69f,h*.59f,21,WHITE,true);center("Рядом, без роутера",w*.69f,h*.64f,15,MUTED,false);
+            center("⌁",w*.69f,h*.51f,45,RED,true);center("BLUETOOTH",w*.69f,h*.59f,21,WHITE,true);center("Поиск устройств рядом",w*.69f,h*.64f,15,MUTED,false);
             button("bt","ВЫБРАТЬ",w*.60f,h*.665f,w*.18f,h*.055f,RED,true);
         }
         void drawLobby(float w,float h){
@@ -149,7 +151,7 @@ public class MainActivity extends Activity {
             }else{
                 center(status,w/2,h*.78f,Math.min(15,w*.02f),connected?MINT:GOLD,true);
             }
-            String connectionLine=mode==0?(host?"ВАШ IP: "+localIp()+"  •  ПОРТ 47822":"ПОДКЛЮЧЕНИЕ ПО ЛОКАЛЬНОЙ СЕТИ"):"BLUETOOTH • СОПРЯГИТЕ УСТРОЙСТВА";
+            String connectionLine=mode==0?(host?"ЛОББИ ВИДНО УСТРОЙСТВАМ В ЭТОЙ WI-FI СЕТИ":"ПОИСК ЛОББИ В ЛОКАЛЬНОЙ СЕТИ"):(host?"BLUETOOTH • ОЖИДАНИЕ ПОДКЛЮЧЕНИЯ":"BLUETOOTH • ВЫБЕРИТЕ УСТРОЙСТВО РЯДОМ");
             center(connectionLine,w/2,h*.91f,Math.min(13,w*.018f),Color.rgb(145,166,197),true);
             center("DUALITY  /  CO-OP",w/2,h*.96f,11,Color.rgb(90,113,148),true);
         }
@@ -351,13 +353,15 @@ public class MainActivity extends Activity {
             invalidate();
         }
         void showLobbyChoice(){
-            String[] options={"Создать лобби","Подключиться к лобби"};
-            new AlertDialog.Builder(MainActivity.this).setTitle("МУЛЬТИПЛЕЕР").setItems(options,(d,which)->{if(which==0)createLobby();else joinLobby();}).setNegativeButton("ОТМЕНА",null).show();
+            String[] options={"Создать лобби","Найти доступные лобби"};
+            new AlertDialog.Builder(MainActivity.this).setTitle(mode==0?"ИГРА ПО WI-FI":"ИГРА ПО BLUETOOTH")
+                .setMessage(mode==0?"Оба телефона должны быть подключены к одной Wi-Fi сети. Хост создаёт комнату, второй игрок выбирает её из списка.":"Bluetooth — для устройств рядом. «Сопряжение» означает, что телефоны один раз подтвердили связь в настройках Bluetooth. После этого выберите телефон из списка.")
+                .setItems(options,(d,which)->{if(which==0)createLobby();else joinLobby();}).setNegativeButton("ОТМЕНА",null).show();
         }
         void createLobby(){
             host=true;connected=false;started=false;screen=2;status="ОЖИДАНИЕ ИГРОКА";invalidate();
             if(mode==0){
-                netThread=new Thread(()->{try{server=new ServerSocket(47822);Socket s=server.accept();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");runReader();}catch(Exception ex){status="Не удалось создать лобби: "+ex.getMessage();postInvalidate();}});netThread.start();
+                netThread=new Thread(()->{try{server=new ServerSocket(47822);startLobbyBeacon();Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби. Проверьте Wi-Fi и повторите попытку.";stopLobbyBeacon();postInvalidate();}});netThread.start();
             }else{
                 if(bt==null){toast("На устройстве нет Bluetooth");return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},401);return;}
@@ -366,13 +370,67 @@ public class MainActivity extends Activity {
         }
         void joinLobby(){
             if(mode==0){
-                EditText input=new EditText(MainActivity.this);input.setSingleLine(true);input.setHint("IP хоста, например 192.168.1.5");input.setInputType(16);
-                new AlertDialog.Builder(MainActivity.this).setTitle("Подключиться по Wi-Fi").setView(input).setNegativeButton("ОТМЕНА",null).setPositiveButton("ПОДКЛЮЧИТЬ",(d,v)->{String address=input.getText().toString().trim();if(address.isEmpty()){toast("Введи IP хоста");return;}ip=address;host=false;screen=2;status="ПОДКЛЮЧЕНИЕ…";netThread=new Thread(()->{try{Socket s=new Socket();s.connect(new InetSocketAddress(ip,47822),7000);socket=s;setupStreams(s);connected=true;status="СОЕДИНЕНО";send("JOIN");runReader();}catch(Exception ex){status="Не удалось подключиться. Проверь IP и Wi-Fi.";postInvalidate();}});netThread.start();invalidate();}).show();
+                screen=2;host=false;connected=false;status="ПОИСК ДОСТУПНЫХ ЛОББИ…";invalidate();
+                netThread=new Thread(()->discoverLobbies());netThread.start();
             }else{
                 if(bt==null){toast("На устройстве нет Bluetooth");return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},402);return;}
-                try{Set<BluetoothDevice> devices=bt.getBondedDevices();if(devices.isEmpty()){toast("Сначала сопрягите телефоны в настройках Bluetooth");return;}ArrayList<BluetoothDevice> list=new ArrayList<>(devices);String[] names=new String[list.size()];for(int i=0;i<list.size();i++)names[i]=list.get(i).getName()+"\n"+list.get(i).getAddress();new AlertDialog.Builder(MainActivity.this).setTitle("Выберите сопряжённое устройство").setItems(names,(d,which)->{host=false;screen=2;netThread=new Thread(()->{try{BluetoothSocket bs=list.get(which).createRfcommSocketToServiceRecord(BT_UUID);bs.connect();btSocket=bs;setupStreams(new BluetoothStreamSocket(bs));connected=true;send("JOIN");status="СОЕДИНЕНО";runReader();}catch(Exception ex){status="Не удалось подключиться по Bluetooth";postInvalidate();}});netThread.start();invalidate();}).show();}catch(Exception ex){toast("Разрешите доступ к Bluetooth");}
+                try{Set<BluetoothDevice> devices=bt.getBondedDevices();if(devices.isEmpty()){new AlertDialog.Builder(MainActivity.this).setTitle("Телефоны ещё не сопряжены").setMessage("Сопряжение — это разовое подтверждение связи между телефонами. Откройте настройки → Bluetooth на обоих устройствах, включите Bluetooth, выберите второй телефон и подтвердите одинаковый код. Затем вернитесь в игру и снова нажмите «Найти доступные лобби».").setPositiveButton("ПОНЯТНО",null).show();return;}ArrayList<BluetoothDevice> list=new ArrayList<>(devices);String[] names=new String[list.size()];for(int i=0;i<list.size();i++)names[i]=list.get(i).getName()+"\n"+list.get(i).getAddress();new AlertDialog.Builder(MainActivity.this).setTitle("Выберите телефон рядом").setMessage("Показываются телефоны, уже сопряжённые в системных настройках Bluetooth.").setItems(names,(d,which)->{host=false;screen=2;netThread=new Thread(()->{try{BluetoothSocket bs=list.get(which).createRfcommSocketToServiceRecord(BT_UUID);bs.connect();btSocket=bs;setupStreams(new BluetoothStreamSocket(bs));connected=true;send("JOIN");status="СОЕДИНЕНО";runReader();}catch(Exception ex){status="Не удалось подключиться по Bluetooth";postInvalidate();}});netThread.start();invalidate();}).show();}catch(Exception ex){toast("Разрешите доступ к Bluetooth");}
             }
+        }
+        void startLobbyBeacon(){
+            stopLobbyBeacon();discoveryRunning=true;
+            beaconThread=new Thread(()->{
+                DatagramSocket ds=null;
+                try{
+                    ds=new DatagramSocket();ds.setBroadcast(true);
+                    byte[] data=("DUALITY_LOBBY|"+android.os.Build.MODEL+"|47822").getBytes(StandardCharsets.UTF_8);
+                    while(discoveryRunning && server!=null && !server.isClosed()){
+                        try{ds.send(new DatagramPacket(data,data.length,InetAddress.getByName("255.255.255.255"),47823));}catch(Exception ignored){}
+                        try{Thread.sleep(900);}catch(InterruptedException ignored){break;}
+                    }
+                }catch(Exception ignored){}finally{if(ds!=null)ds.close();}
+            });beaconThread.start();
+        }
+        void stopLobbyBeacon(){discoveryRunning=false;if(beaconThread!=null){beaconThread.interrupt();beaconThread=null;}}
+        void discoverLobbies(){
+            LinkedHashMap<String,String> found=new LinkedHashMap<>();DatagramSocket ds=null;
+            try{
+                ds=new DatagramSocket(null);ds.setReuseAddress(true);ds.bind(new InetSocketAddress(47823));ds.setSoTimeout(2500);
+                long end=System.currentTimeMillis()+2500;
+                while(System.currentTimeMillis()<end){
+                    byte[] buf=new byte[512];DatagramPacket packet=new DatagramPacket(buf,buf.length);
+                    try{
+                        ds.receive(packet);String msg=new String(packet.getData(),packet.getOffset(),packet.getLength(),StandardCharsets.UTF_8);
+                        if(msg.startsWith("DUALITY_LOBBY|")){String[] parts=msg.split("\\|");if(parts.length>=3){String address=packet.getAddress().getHostAddress();found.put(address,(parts[1].isEmpty()?"Устройство DUALITY":parts[1])+" • "+address);}}
+                    }catch(SocketTimeoutException timeout){break;}
+                }
+            }catch(Exception ex){handler.post(()->toast("Не удалось найти лобби. Проверьте общую Wi-Fi сеть."));}
+            finally{if(ds!=null)ds.close();}
+            ArrayList<String> addresses=new ArrayList<>(found.keySet());ArrayList<String> labels=new ArrayList<>(found.values());
+            handler.post(()->{
+                if(isFinishing())return;
+                if(addresses.isEmpty()){
+                    new AlertDialog.Builder(MainActivity.this).setTitle("Лобби не найдены")
+                        .setMessage("Подключите оба телефона к одной Wi-Fi сети. На первом телефоне нажмите «Создать лобби», затем повторите поиск.")
+                        .setPositiveButton("ИСКАТЬ СНОВА",(d,v)->joinLobby()).setNegativeButton("НАЗАД",(d,v)->{screen=1;invalidate();}).show();
+                }else{
+                    new AlertDialog.Builder(MainActivity.this).setTitle("ДОСТУПНЫЕ ЛОББИ")
+                        .setMessage("Выберите комнату для подключения.")
+                        .setItems(labels.toArray(new String[0]),(d,which)->connectToLobby(addresses.get(which)))
+                        .setNeutralButton("ОБНОВИТЬ",(d,v)->joinLobby()).setNegativeButton("НАЗАД",(d,v)->{screen=1;invalidate();}).show();
+                }
+            });
+        }
+        void connectToLobby(String address){
+            ip=address;host=false;screen=2;status="ПОДКЛЮЧЕНИЕ…";invalidate();
+            netThread=new Thread(()->{try{
+                Socket s=new Socket();s.connect(new InetSocketAddress(address,47822),7000);socket=s;setupStreams(s);
+                connected=true;status="СОЕДИНЕНО";send("JOIN");handler.post(()->invalidate());runReader();
+            }catch(Exception ex){
+                status="Не удалось подключиться. Обновите список и проверьте Wi-Fi.";
+                handler.post(()->new AlertDialog.Builder(MainActivity.this).setTitle("Не удалось подключиться").setMessage("Лобби могло закрыться или телефоны не в одной сети.").setPositiveButton("ПОНЯТНО",null).show());postInvalidate();
+            }});netThread.start();
         }
         // Adapts RFCOMM streams to the same simple message protocol used by Wi-Fi.
         class BluetoothStreamSocket extends Socket {
@@ -407,7 +465,7 @@ public class MainActivity extends Activity {
             invalidate();
         }
         String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}
-        void closeNetwork(){try{if(socket!=null)socket.close();}catch(Exception ignored){}try{if(server!=null)server.close();}catch(Exception ignored){}try{if(btSocket!=null)btSocket.close();}catch(Exception ignored){}try{if(btServer!=null)btServer.close();}catch(Exception ignored){}socket=null;server=null;writer=null;reader=null;connected=false;host=false;}
+        void closeNetwork(){try{if(socket!=null)socket.close();}catch(Exception ignored){}stopLobbyBeacon();try{if(server!=null)server.close();}catch(Exception ignored){}try{if(btSocket!=null)btSocket.close();}catch(Exception ignored){}try{if(btServer!=null)btServer.close();}catch(Exception ignored){}socket=null;server=null;writer=null;reader=null;connected=false;host=false;}
         void toast(String s){Toast.makeText(MainActivity.this,s,Toast.LENGTH_LONG).show();}
         void back(){if(showSettings){showSettings=false;}else if(screen==3){screen=2;}else if(screen==2){closeNetwork();screen=1;}else if(screen==1)screen=0;else superBack();invalidate();}
         void superBack(){MainActivity.super.onBackPressed();}
