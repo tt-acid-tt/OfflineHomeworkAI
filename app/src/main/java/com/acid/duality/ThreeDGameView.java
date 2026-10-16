@@ -26,7 +26,8 @@ import javax.microedition.khronos.opengles.GL10;
 
 public class ThreeDGameView extends GLSurfaceView {
     volatile int screen=0; // 0 menu, 1 room lobby, 2 game
-    volatile int stage=0, moves=0;
+    volatile int stage=0, moves=0, wood=0, scrap=0;
+    volatile boolean wreckSearched=false;
     volatile float sceneTime=0f;
     volatile int choiceIndex=0, peerChoice=0, resultCode=0, lastPeerResult=0;
     volatile boolean started=false, solo=false, ready=false;
@@ -76,11 +77,15 @@ public class ThreeDGameView extends GLSurfaceView {
     void selectPrevious() { if(screen==2 && nearInteract && !confirmed){choiceIndex=(choiceIndex+3)%4;hud.invalidate();} }
     void selectNext() { if(screen==2 && nearInteract && !confirmed){choiceIndex=(choiceIndex+1)%4;hud.invalidate();} }
     void interact() {
-        if(screen!=2) return;
-        if(stage>=4) { backToMenu(); return; }
-        if(!nearInteract || confirmed) return;
-        confirmed=true; ready=true; moves++;
-        notice="Ответ зафиксирован. Ждите второго игрока.";
+        if(screen!=2 || !nearInteract) return;
+        moves++;
+        if(!wreckSearched && Math.abs(playerX)<3.2f && Math.abs(playerZ+8.5f)<4.0f) {
+            wreckSearched=true; scrap+=2; wood++;
+            notice="Обломки обысканы: найден металл и обломки кресла.";
+        } else {
+            wood++;
+            notice="Собрано дерево: "+wood+"  •  металл: "+scrap;
+        }
         hud.invalidate();
     }
 
@@ -162,7 +167,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 fill(c,18,16,Math.min(w*.47f,460),105,14,Color.argb(190,9,15,11));
                 text(c,"AFTERMATH  /  DAY 01",34,42,17,Color.rgb(230,231,210),true);
                 text(c,"ЦЕЛЬ: ОСМОТРИ ОБЛОМКИ САМОЛЁТА",34,68,Math.min(14,w*.018f),Color.rgb(210,174,119),true);
-                text(c,"СОБИРАЙ РЕСУРСЫ • ИЩИ УКРЫТИЕ • НЕ ШУМИ",34,91,Math.min(11,w*.014f),Color.rgb(183,195,173),false);
+                text(c,"ДЕРЕВО: "+g.wood+"     МЕТАЛЛ: "+g.scrap+"     ИЗУЧИ ОБЛОМКИ",34,91,Math.min(11,w*.014f),Color.rgb(183,195,173),false);
                 // Left movement stick.
                 float bx=Math.min(112,w*.12f),by=h-100;
                 p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(72,185,215,245));c.drawCircle(bx,by,62,p);
@@ -171,7 +176,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 center(c,"ДВИЖЕНИЕ",bx,by+88,11,Color.argb(220,220,235,250),true);
                 // Look zone hint, no extra directional buttons.
                 center(c,"СВАЙП — СМОТРЕТЬ • СТИК — ИДТИ",w*.69f,h-20,Math.min(13,w*.016f),Color.argb(185,225,236,250),true);
-                if(g.nearInteract){ fill(c,w-208,h-112,w-22,h-48,16,Color.rgb(178,112,61));center(c,"E  ОСМОТРЕТЬ",w-115,h-72,Math.min(16,w*.02f),Color.rgb(20,18,12),true); }
+                if(g.nearInteract){ fill(c,w-208,h-112,w-22,h-48,16,Color.rgb(178,112,61));center(c,"E  СОБРАТЬ",w-115,h-72,Math.min(16,w*.02f),Color.rgb(20,18,12),true); }
             }
             postInvalidateDelayed(50);
         }
@@ -208,7 +213,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 case MotionEvent.ACTION_DOWN: {
                     if(g.screen==3){g.screen=2;g.sceneTime=8.6f;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;g.hud.invalidate();return true;}
                     int id=e.getPointerId(0); lastX=x;lastY=y;
-                    if(g.nearInteract&&y>h-140&&x>w-220){g.moves++;g.notice="Ты осмотрел место крушения.";g.nearInteract=false;g.hud.invalidate();return true;}
+                    if(g.nearInteract&&y>h-140&&x>w-220){g.interact();return true;}
                     if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
                     else {look=true;lookPointer=id;}
                     return true;
@@ -275,6 +280,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 g.sceneTime+=.025f;
                 if(g.sceneTime>=8.5f){g.screen=2;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;}
             }
+            if(g.screen==3 && g.started) g.packetTick();
             if(g.screen==2 && g.started){
                 float speed=.105f,sy=g.stickY,sx=g.stickX;
                 float rightX=(float)Math.cos(g.yaw),rightZ=(float)Math.sin(g.yaw);
@@ -283,7 +289,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 px=Math.max(-22f,Math.min(22f,px));pz=Math.max(-78f,Math.min(8f,pz));
                 g.playerX=px;g.playerZ=pz;g.packetTick();
                 if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* state is shared through LAN packets */ }
-                g.nearInteract=(Math.abs(px)<2.8f&&Math.abs(pz+8.5f)<3.5f)||(Math.abs(px-4)<2f&&Math.abs(pz+12)<2f);
+                g.nearInteract=(!g.wreckSearched&&Math.abs(px)<3.2f&&Math.abs(pz+8.5f)<4.0f)||nearTree(px,pz);
             } else if(g.screen!=3){px=g.playerX;pz=g.playerZ;}
             float eyeY=1.66f,camX=px,camZ=pz,camYaw=g.yaw,camPitch=g.pitch;
             if(g.screen==3){
@@ -375,6 +381,20 @@ public class ThreeDGameView extends GLSurfaceView {
             box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});
             box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});
             box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});
+        }
+        boolean nearTree(float x,float z){
+            for(int i=0;i<65;i++){
+                float tz=5f-(i/5)*6.1f;
+                float tx=-25f+(i%5)*12.3f+((i%2)*1.8f);
+                if(Math.abs(tx)<4.5f && tz>-18) tx+=tx<0?-5.5f:5.5f;
+                if(Math.abs(x-tx)<1.7f && Math.abs(z-tz)<1.7f) return true;
+            }
+            for(int i=0;i<18;i++){
+                float tz=3f-i*4.4f;
+                float tx=(i%2==0?-1:1)*(5.2f+(i%4)*1.3f);
+                if(Math.abs(x-tx)<1.5f && Math.abs(z-tz)<1.5f) return true;
+            }
+            return false;
         }
         void bush(float x,float z,float s){
             box(x,.24f,z,s,.42f,s*.8f,new float[]{.13f,.22f,.12f,1});
