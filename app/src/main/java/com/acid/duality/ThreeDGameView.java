@@ -170,7 +170,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 if(g.nearInteract){
                     fill(c,w-340,h-144,w-274,h-58,15,Color.argb(225,25,44,66));center(c,"◀",w-307,h-91,25,Color.WHITE,true);
                     fill(c,w-270,h-144,w-204,h-58,15,Color.argb(225,25,44,66));center(c,"▶",w-237,h-91,25,Color.WHITE,true);
-                    fill(c,w-198,h-144,w-22,h-58,15,confirmed?Color.rgb(255,190,75):Color.rgb(70,255,214));
+                    fill(c,w-198,h-144,w-22,h-58,15,g.confirmed?Color.rgb(255,190,75):Color.rgb(70,255,214));
                     center(c,confirmed?"ОЖИДАНИЕ...":"ЗАФИКСИРОВАТЬ",w-110,h-112,Math.min(14,w*.018f),Color.rgb(4,20,31),true);
                     center(c,"КОД: "+new String[]{"1  △","2  ○","3  ◇","4  ☾"}[g.choiceIndex],w-110,h-82,18,Color.rgb(4,20,31),true);
                 }
@@ -284,7 +284,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 float rightX=(float)Math.cos(g.yaw),rightZ=(float)Math.sin(g.yaw);
                 float forwardX=(float)Math.sin(g.yaw),forwardZ=-(float)Math.cos(g.yaw);
                 px+= (rightX*sx+forwardX*sy)*speed; pz+=(rightZ*sx+forwardZ*sy)*speed;
-                px=Math.max(-4.3f,Math.min(4.3f,px));pz=Math.max(-38f,Math.min(2f,pz));
+                px=Math.max(-4.3f,Math.min(4.3f,px));pz=Math.max(-56f,Math.min(2f,pz));
                 g.playerX=px;g.playerZ=pz;g.packetTick();
                 if(g.solo){
                     g.peerX=2.0f; g.peerZ=roomZ(g.stage); g.peerReady=true; g.peerChoice=clientAnswer(g.stage);
@@ -335,7 +335,7 @@ public class ThreeDGameView extends GLSurfaceView {
         }
         boolean nearConsole(float x,float z,int stage){
             if(stage>=4) return false;
-            float side=solo?-2.0f:(lan.hosting?-2.0f:2.0f);
+            float side=g.solo?-2.0f:(g.lan.hosting?-2.0f:2.0f);
             return Math.abs(x-side)<1.65f && Math.abs(z-roomZ(stage))<2.0f;
         }
         static float roomZ(int n){return -7.0f-n*11.5f;}
