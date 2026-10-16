@@ -246,7 +246,7 @@ public class ThreeDGameView extends GLSurfaceView {
     static class World implements GLSurfaceView.Renderer {
         final ThreeDGameView g;
         final float[] proj=new float[16],view=new float[16],model=new float[16],mv=new float[16],mvp=new float[16];
-        int program,posLoc,colorLoc,mvpLoc,lightLoc;
+        int program,posLoc,colorLoc,mvpLoc,lightLoc,modelLoc,eyeLoc;
         FloatBuffer vertices;
         final float[] cube={
         -0.5f,-0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,
@@ -256,102 +256,130 @@ public class ThreeDGameView extends GLSurfaceView {
         -0.5f,0.5f,0.5f,0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,-0.5f,
         -0.5f,-0.5f,-0.5f,0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,0.5f};
         float px=0,pz=0,elapsed=0;
-        final String vs="attribute vec3 aPos; uniform mat4 uMVP; varying vec3 vPos; void main(){vPos=aPos;gl_Position=uMVP*vec4(aPos,1.0);}";
-        final String fs="precision mediump float;uniform vec4 uColor;uniform vec3 uLight;varying vec3 vPos;void main(){float l=0.58+0.42*max(0.0,dot(normalize(vPos+vec3(0.51)),normalize(uLight)));gl_FragColor=vec4(uColor.rgb*l,uColor.a);}";
+        final String vs="attribute vec3 aPos; uniform mat4 uMVP; uniform mat4 uModel; varying vec3 vPos; varying vec3 vWorld; void main(){vPos=aPos;vec4 wp=uModel*vec4(aPos,1.0);vWorld=wp.xyz;gl_Position=uMVP*vec4(aPos,1.0);}";
+        final String fs="precision mediump float;uniform vec4 uColor;uniform vec3 uLight;uniform vec3 uEye;varying vec3 vPos;varying vec3 vWorld;void main(){float l=0.48+0.52*max(0.0,dot(normalize(vPos+vec3(0.51)),normalize(uLight)));float shade=0.92+0.08*sin(vWorld.x*1.7+vWorld.z*0.43);vec3 base=uColor.rgb*l*shade;float fog=smoothstep(18.0,58.0,distance(vWorld,uEye));vec3 fogColor=vec3(0.12,0.16,0.14);gl_FragColor=vec4(mix(base,fogColor,fog),uColor.a);}";
         World(ThreeDGameView game){g=game;}
         int shader(int type,String src){int s=GLES20.glCreateShader(type);GLES20.glShaderSource(s,src);GLES20.glCompileShader(s);return s;}
         @Override public void onSurfaceCreated(GL10 gl,EGLConfig cfg){
             GLES20.glClearColor(.018f,.035f,.07f,1);GLES20.glEnable(GLES20.GL_DEPTH_TEST);GLES20.glDisable(GLES20.GL_CULL_FACE);
             int v=shader(GLES20.GL_VERTEX_SHADER,vs),f=shader(GLES20.GL_FRAGMENT_SHADER,fs);program=GLES20.glCreateProgram();GLES20.glAttachShader(program,v);GLES20.glAttachShader(program,f);GLES20.glLinkProgram(program);
             ByteBuffer b=ByteBuffer.allocateDirect(cube.length*4).order(ByteOrder.nativeOrder());vertices=b.asFloatBuffer();vertices.put(cube).position(0);
-            posLoc=GLES20.glGetAttribLocation(program,"aPos");mvpLoc=GLES20.glGetUniformLocation(program,"uMVP");colorLoc=GLES20.glGetUniformLocation(program,"uColor");lightLoc=GLES20.glGetUniformLocation(program,"uLight");
+            posLoc=GLES20.glGetAttribLocation(program,"aPos");mvpLoc=GLES20.glGetUniformLocation(program,"uMVP");colorLoc=GLES20.glGetUniformLocation(program,"uColor");lightLoc=GLES20.glGetUniformLocation(program,"uLight");modelLoc=GLES20.glGetUniformLocation(program,"uModel");eyeLoc=GLES20.glGetUniformLocation(program,"uEye");
         }
         @Override public void onSurfaceChanged(GL10 gl,int w,int h){GLES20.glViewport(0,0,w,h);Matrix.perspectiveM(proj,0,72,(float)w/Math.max(1,h),.1f,100);}
         @Override public void onDrawFrame(GL10 gl){
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);elapsed+=.025f;
+            GLES20.glClearColor(.13f,.17f,.15f,1);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);
+            elapsed+=.025f;
+            if(g.screen==3){
+                g.sceneTime+=.025f;
+                if(g.sceneTime>=8.5f){g.screen=2;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;}
+            }
             if(g.screen==2 && g.started){
-                float speed=.075f,sy=g.stickY,sx=g.stickX;
+                float speed=.105f,sy=g.stickY,sx=g.stickX;
                 float rightX=(float)Math.cos(g.yaw),rightZ=(float)Math.sin(g.yaw);
                 float forwardX=(float)Math.sin(g.yaw),forwardZ=-(float)Math.cos(g.yaw);
-                px+= (rightX*sx+forwardX*sy)*speed; pz+=(rightZ*sx+forwardZ*sy)*speed;
-                px=Math.max(-4.3f,Math.min(4.3f,px));pz=Math.max(-56f,Math.min(2f,pz));
+                px+=(rightX*sx+forwardX*sy)*speed; pz+=(rightZ*sx+forwardZ*sy)*speed;
+                px=Math.max(-22f,Math.min(22f,px));pz=Math.max(-78f,Math.min(8f,pz));
                 g.playerX=px;g.playerZ=pz;g.packetTick();
-                if(g.solo){
-                    g.peerX=2.0f; g.peerZ=roomZ(g.stage); g.peerReady=true; g.peerChoice=clientAnswer(g.stage);
-                    if(g.stage<4 && g.ready && g.confirmed && playerAtRoom(px,pz,g.stage,-2.0f)) {
-                        if(g.choiceIndex==hostAnswer(g.stage)) {
-                            g.stage++; g.ready=false; g.confirmed=false; g.choiceIndex=0;
-                            g.notice=g.stage>=4?"Все комнаты пройдены!":"Верно. Следующая комната открыта.";
-                        } else {
-                            g.ready=false; g.confirmed=false; g.resultCode++; g.notice="Ошибка декодирования. Проверьте подсказку.";
-                        }
-                    }
-                }
-                if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* host publishes authoritative stage in each packet */ }
-                g.nearInteract=g.stage<4 && nearConsole(px,pz,g.stage);
-            } else {px=g.playerX;pz=g.playerZ;}
-            float eyeY=1.62f;
-            float cy=(float)Math.cos(g.yaw),sy=(float)Math.sin(g.yaw),cp=(float)Math.cos(g.pitch),sp=(float)Math.sin(g.pitch);
-            float tx=px+sy*cp,tz=pz-cy*cp,ty=eyeY+sp;
-            Matrix.setLookAtM(view,0,px,eyeY,pz,tx,ty,tz,0,1,0);
-            GLES20.glUseProgram(program);GLES20.glEnableVertexAttribArray(posLoc);vertices.position(0);GLES20.glVertexAttribPointer(posLoc,3,GLES20.GL_FLOAT,false,12,vertices);GLES20.glUniform3f(lightLoc,-.4f,1,.35f);
-            // Four distinct rooms; each has its own console pair and gate.
-            box(0,-.18f,-26,12,.36f,62,new float[]{.035f,.065f,.11f,1});
-            for(int i=0;i<34;i++){float z=2-i*1.8f;box(0,.012f,z,10.7f,.025f,1.72f,new float[]{.065f,.105f,.16f,1});box(-5.15f,.04f,z,.045f,.05f,1.6f,new float[]{.06f,.65f,.68f,1});box(5.15f,.04f,z,.045f,.05f,1.6f,new float[]{.06f,.65f,.68f,1});}
-            box(-5.55f,1.8f,-26,.45f,3.7f,62,new float[]{.08f,.13f,.22f,1});box(5.55f,1.8f,-26,.45f,3.7f,62,new float[]{.08f,.13f,.22f,1});
-            for(int i=0;i<17;i++){float z=1-i*3.6f;box(-5.28f,1.8f,z,.13f,3.65f,.16f,new float[]{.09f,.58f,.68f,1});box(5.28f,1.8f,z,.13f,3.65f,.16f,new float[]{.09f,.58f,.68f,1});}
-            for(int i=0;i<4;i++) station(i,roomZ(i));
-            for(int i=0;i<4;i++) if(g.stage<=i) gate(i,roomZ(i)-4.5f);
-            if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.2f,.45f,1,1}:new float[]{1,.22f,.36f,1});
-            if(g.screen==2 && g.started && g.solo) remoteHero(g.peerX,g.peerZ,new float[]{.2f,.45f,1,1});
-            // Soft overhead lamps and destination portal.
-            for(int i=0;i<6;i++){float z=-i*6f-2;box(0,3.55f,z,2.2f,.08f,.42f,new float[]{.08f,.3f,.42f,1});}
-            box(-1.5f,1.7f,-53,.22f,3.4f,.22f,new float[]{.16f,.9f,.72f,1});box(1.5f,1.7f,-53,.22f,3.4f,.22f,new float[]{.16f,.9f,.72f,1});box(0,3.35f,-53,3.2f,.22f,.22f,new float[]{.16f,.9f,.72f,1});
-            GLES20.glDisableVertexAttribArray(posLoc);
-        }
-        void updateHostPuzzle(){
-            if(g.stage>=4) return;
-            boolean hostAt=playerAtRoom(g.playerX,g.playerZ,g.stage,-2.0f);
-            boolean clientAt=playerAtRoom(g.peerX,g.peerZ,g.stage,2.0f);
-            if(hostAt && clientAt && g.ready && g.peerReady) {
-                if(g.choiceIndex==hostAnswer(g.stage) && g.peerChoice==clientAnswer(g.stage)) {
-                    g.stage++; g.ready=false; g.confirmed=false; g.choiceIndex=0;
-                    g.resultCode=0; g.notice=g.stage>=4?"Шлюз открыт. Вы прошли весь комплекс!":"Доступ подтверждён. Переходите в следующую комнату.";
+                if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* state is shared through LAN packets */ }
+                g.nearInteract=(Math.abs(px)<2.8f&&Math.abs(pz+8.5f)<3.5f)||(Math.abs(px-4)<2f&&Math.abs(pz+12)<2f);
+            } else if(g.screen!=3){px=g.playerX;pz=g.playerZ;}
+            float eyeY=1.66f,camX=px,camZ=pz,camYaw=g.yaw,camPitch=g.pitch;
+            if(g.screen==3){
+                float t=g.sceneTime;
+                if(t<5.0f){
+                    camX=(float)Math.sin(t*5.4f)*(.04f+t*.035f);
+                    camZ=3.4f-t*1.15f;
+                    eyeY=1.62f-Math.max(0,t-2.8f)*.17f;
+                    camYaw=(float)Math.sin(t*7.5f)*(.025f+t*.018f);
+                    camPitch=(float)Math.sin(t*6.8f)*.06f+(t>2.7f?-.15f:0);
                 } else {
-                    g.ready=false; g.confirmed=false; g.resultCode++;
-                    g.notice="Код не принят. Сопоставьте подсказки ещё раз.";
+                    float settle=Math.min(1f,(t-5f)/2f);
+                    camX=(float)Math.sin(t*16f)*.05f*(1-settle);
+                    camZ=-1.5f-settle*1.0f;
+                    eyeY=1.05f+settle*.55f;
+                    camPitch=-.14f*(1-settle);
                 }
             }
+            float cy=(float)Math.cos(camYaw),sy=(float)Math.sin(camYaw),cp=(float)Math.cos(camPitch),sp=(float)Math.sin(camPitch);
+            float tx=camX+sy*cp,tz=camZ-cy*cp,ty=eyeY+sp;
+            Matrix.setLookAtM(view,0,camX,eyeY,camZ,tx,ty,tz,0,1,0);
+            GLES20.glUseProgram(program);GLES20.glEnableVertexAttribArray(posLoc);vertices.position(0);GLES20.glVertexAttribPointer(posLoc,3,GLES20.GL_FLOAT,false,12,vertices);
+            GLES20.glUniform3f(lightLoc,-.35f,1f,.22f);GLES20.glUniform3f(eyeLoc,camX,eyeY,camZ);
+            // Damp forest floor, moss patches, stones and dense tree lines.
+            box(0,-.34f,-37,58,.6f,94,new float[]{.16f,.19f,.13f,1});
+            for(int i=0;i<65;i++){
+                float z=5f-(i/5)*6.1f;
+                float x=-25f+(i%5)*12.3f+((i%2)*1.8f);
+                if(Math.abs(x)<4.5f && z>-18) x+=x<0?-5.5f:5.5f;
+                tree(x,z,3.6f+(i%4)*.48f,i);
+            }
+            for(int i=0;i<18;i++){
+                float z=3f-i*4.4f;
+                float x=(i%2==0?-1:1)*(5.2f+(i%4)*1.3f);
+                tree(x,z,3.0f+(i%3)*.55f,i+90);
+            }
+            for(int i=0;i<34;i++){
+                float x=(float)Math.sin(i*12.73f)*20f;
+                float z=2f-(i*2.31f)%76f;
+                float scale=.35f+(i%5)*.13f;
+                box(x,.1f,z,scale*1.7f,scale,scale*1.4f,new float[]{.22f,.24f,.19f,1});
+                if(i%3==0) bush(x+1f,z-.4f,scale*1.5f);
+            }
+            // Wrecked passenger aircraft: broken fuselage, torn wing, engine and scattered seats.
+            box(0,1.65f,-10.5f,3.5f,2.45f,12f,new float[]{.32f,.34f,.31f,1});
+            box(0,1.82f,-16.2f,2.9f,1.95f,3.2f,new float[]{.25f,.27f,.25f,1});
+            box(-4.3f,1.15f,-10.4f,7.5f,.25f,2.1f,new float[]{.34f,.36f,.32f,1});
+            box(-6.8f,1.25f,-11.8f,2.2f,.22f,1.4f,new float[]{.25f,.27f,.24f,1});
+            box(2.15f,1.0f,-8.4f,.5f,1.6f,4.3f,new float[]{.28f,.29f,.26f,1});
+            box(-1.1f,.75f,-5.9f,.25f,1.1f,1.8f,new float[]{.42f,.41f,.34f,1});
+            box(1.0f,.55f,-6.8f,1.3f,.25f,.9f,new float[]{.19f,.2f,.18f,1});
+            box(-3.2f,.25f,-7.2f,1.1f,.2f,.8f,new float[]{.31f,.3f,.25f,1});
+            box(4.2f,.15f,-15.5f,2.0f,.2f,1.3f,new float[]{.3f,.31f,.28f,1});
+            // Broken aircraft interior visible during the crash sequence.
+            if(g.screen==3 && g.sceneTime<5.15f){
+                box(-2.05f,1.5f,-1.0f,.16f,2.8f,12f,new float[]{.22f,.24f,.23f,1});
+                box(2.05f,1.5f,-1.0f,.16f,2.8f,12f,new float[]{.22f,.24f,.23f,1});
+                box(0,2.9f,-1.0f,4.2f,.18f,12f,new float[]{.25f,.27f,.25f,1});
+                box(0,.16f,-1.0f,4.2f,.2f,12f,new float[]{.25f,.26f,.23f,1});
+                for(int i=0;i<4;i++){
+                    float z=1.8f-i*2.4f;
+                    box(-1.05f,.75f,z,.55f,1.1f,.75f,new float[]{.2f,.22f,.22f,1});
+                    box(1.05f,.75f,z,.55f,1.1f,.75f,new float[]{.2f,.22f,.22f,1});
+                    box(-1.05f,1.3f,z,.55f,.18f,.6f,new float[]{.38f,.3f,.22f,1});
+                    box(1.05f,1.3f,z,.55f,.18f,.6f,new float[]{.38f,.3f,.22f,1});
+                }
+                box(-.7f,2.15f,-5.5f,1.0f,.12f,.25f,new float[]{.8f,.28f,.09f,1});
+                box(.55f,2.12f,-5.4f,.8f,.1f,.2f,new float[]{.78f,.12f,.07f,1});
+            }
+            // Subtle sunbeams, mossy logs, and a distant ridgeline.
+            for(int i=0;i<9;i++){
+                float z=-24f-i*6f;
+                box((i%2==0?-1:1)*23f,7f,z,10f,.12f,.18f,new float[]{.28f,.32f,.24f,1});
+            }
+            for(int i=0;i<8;i++){
+                float x=(i-4)*4.7f;
+                box(x,.38f,-22f-i*5f,2.4f,.38f,.42f,new float[]{.24f,.25f,.2f,1});
+            }
+            if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.38f,.4f,.32f,1}:new float[]{.38f,.4f,.32f,1});
+            if(g.screen==2 && g.started && g.solo) remoteHero(0,-8,new float[]{.38f,.4f,.32f,1});
+            GLES20.glDisableVertexAttribArray(posLoc);
         }
-        boolean nearConsole(float x,float z,int stage){
-            if(stage>=4) return false;
-            float side=g.solo?-2.0f:(g.lan.hosting?-2.0f:2.0f);
-            return Math.abs(x-side)<1.65f && Math.abs(z-roomZ(stage))<2.0f;
+        void tree(float x,float z,float h,int seed){
+            float trunk=.28f+(seed%3)*.07f;
+            box(x,h*.42f,z,trunk,h*.9f,trunk,new float[]{.25f,.18f,.11f,1});
+            box(x-.35f,h*.58f,z+.12f,.16f,h*.35f,.18f,new float[]{.27f,.19f,.11f,1});
+            box(x+.38f,h*.64f,z-.08f,.15f,h*.32f,.16f,new float[]{.27f,.19f,.11f,1});
+            float green=.19f+(seed%4)*.025f;
+            box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});
+            box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});
+            box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});
         }
-        static float roomZ(int n){return -7.0f-n*11.5f;}
-        static int hostAnswer(int n){return new int[]{3,1,2,3}[Math.max(0,Math.min(3,n))];}
-        static int clientAnswer(int n){return new int[]{1,3,0,1}[Math.max(0,Math.min(3,n))];}
-        static boolean playerAtRoom(float x,float z,int stage,float side){
-            return Math.abs(x-side)<1.75f && Math.abs(z-roomZ(stage))<2.1f;
-        }
-        void station(int n,float z){
-            float[][] colors={{1,.18f,.3f,1},{.12f,.38f,.9f,1},{.16f,.9f,.72f,1},{.9f,.45f,.12f,1}};
-            box(-2,.09f,z,1.7f,.18f,1.7f,colors[n]);
-            box(2,.09f,z,1.7f,.18f,1.7f,colors[(n+1)%4]);
-            box(-2,.20f,z,1.15f,.06f,1.15f,new float[]{.16f,.9f,.72f,1});
-            box(2,.20f,z,1.15f,.06f,1.15f,new float[]{.3f,.6f,1,1});
-            if(n==0){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.15f,.25f,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.15f,.4f,1,1});}
-            if(n==1){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.65f,.15f,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.15f,.8f,.7f,1});}
-            if(n==2){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.25f,.38f,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.15f,.48f,1,1});}
-            if(n==3){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.65f,.35f,1,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.35f,.2f,1});}
-            box(0,.04f,z-2.7f,1.0f,.08f,.35f,new float[]{.15f,.8f,.68f,1});
-        }
-        void gate(int n,float z){
-            float glow=n%2==0?.2f:.9f;
-            box(-3,1.25f,z,.18f,2.5f,.28f,new float[]{.2f,.85f,.77f,1});
-            box(3,1.25f,z,.18f,2.5f,.28f,new float[]{.2f,.85f,.77f,1});
-            box(0,2.5f,z,6.1f,.18f,.28f,new float[]{.2f,.85f,.77f,1});
-            box(0,1.25f,z,.08f,2.3f,.12f,new float[]{.12f,.25f,.34f,1});
+        void bush(float x,float z,float s){
+            box(x,.24f,z,s,.42f,s*.8f,new float[]{.13f,.22f,.12f,1});
+            box(x+.22f,.38f,z-.12f,s*.7f,.4f,s*.7f,new float[]{.18f,.27f,.13f,1});
+            box(x-.24f,.31f,z+.16f,s*.65f,.34f,s*.65f,new float[]{.15f,.24f,.12f,1});
         }
         void remoteHero(float x,float z,float[] col){
             box(x,1.0f,z,.56f,.82f,.42f,col);box(x,1.62f,z,.46f,.43f,.43f,new float[]{.83f,.91f,1,1});
@@ -362,7 +390,7 @@ public class ThreeDGameView extends GLSurfaceView {
         void box(float x,float y,float z,float sx,float sy,float sz,float[] color){
             Matrix.setIdentityM(model,0);Matrix.translateM(model,0,x,y,z);Matrix.scaleM(model,0,sx,sy,sz);
             Matrix.multiplyMM(mv,0,view,0,model,0);Matrix.multiplyMM(mvp,0,proj,0,mv,0);
-            GLES20.glUniformMatrix4fv(mvpLoc,1,false,mvp,0);GLES20.glUniform4fv(colorLoc,1,color,0);GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,36);
+            GLES20.glUniformMatrix4fv(modelLoc,1,false,model,0);GLES20.glUniformMatrix4fv(mvpLoc,1,false,mvp,0);GLES20.glUniform4fv(colorLoc,1,color,0);GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,36);
         }
     }
 }
