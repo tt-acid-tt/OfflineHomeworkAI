@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
         Socket socket; ServerSocket server; BufferedReader reader; PrintWriter writer;
         volatile boolean discoveryRunning=false; Thread beaconThread;
         boolean modalOpen=false; String modalTitle="",modalMessage=""; ArrayList<String> modalOptions=new ArrayList<>(); ArrayList<Runnable> modalActions=new ArrayList<>();
-        boolean soloBlue=false, joystickActive=false, leverLeft=false, leverRight=false; float stickX=0,stickY=0; long lastStickMove=0;
+        boolean soloBlue=false, joystickActive=false, leverLeft=false, leverRight=false; float stickX=0,stickY=0; long lastFrameTime=0,lastNetworkMove=0,lastMoveCount=0;
         BluetoothAdapter bt; BluetoothSocket btSocket; BluetoothServerSocket btServer;
         WifiManager.MulticastLock wifiMulticastLock;
         final UUID BT_UUID=UUID.fromString("b6a8a2d1-63ab-4ec3-b4c9-4c6c9b210101");
@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
             center(label,x+w/2,y+h/2+6,Math.min(19,h*.29f),filled?BG:WHITE,true);
         }
         @Override protected void onDraw(Canvas canvas){
-            super.onDraw(canvas); c=canvas; float w=getWidth(),h=getHeight(); anim+=0.035f;
+            super.onDraw(canvas); c=canvas; float w=getWidth(),h=getHeight(); long frameNow=System.currentTimeMillis(); float frameDt=lastFrameTime==0?0.033f:Math.min(0.05f,(frameNow-lastFrameTime)/1000f); lastFrameTime=frameNow; anim+=0.035f; if(screen==3&&joystickActive) updateJoystickMovement(frameDt,frameNow);
             c.drawColor(BG);
             // Ambient aurora, deliberately lightweight for phones.
             p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(15,35,55),BG,Color.rgb(31,18,39)},null,Shader.TileMode.CLAMP));
@@ -190,15 +190,11 @@ public class MainActivity extends Activity {
             text("DUALITY  /  "+(soloMode?"ТЕСТ В ОДИНОЧКУ":(room+1)+" OF "+rooms.length),w*.04f,h*.07f,14,MUTED,true);
             text(rooms[Math.min(room,rooms.length-1)],w*.04f,h*.13f,Math.min(25,w*.035f),WHITE,true);
             drawRoom(0,h*.15f,w,h);
-            float gx=w*.055f,gy=h*.69f,sz=Math.min(w*.065f,h*.13f);
-            button("left","←",gx,gy,sz,sz,BLUE,false);
-            button("up","↑",gx+sz+6,gy-sz-5,sz,sz,BLUE,false);
-            button("down","↓",gx+sz+6,gy,sz,sz,BLUE,false);
-            button("right","→",gx+2*(sz+6),gy,sz,sz,BLUE,false);
-            button("action","ДЕЙСТВИЕ",w*.72f,h*.76f,w*.20f,h*.09f,MINT,true);
-            if(soloMode){button("switchPlayer",soloBlue?"ИГРОК: СИНИЙ  ↔":"ИГРОК: КРАСНЫЙ  ↔",w*.66f,h*.06f,w*.22f,h*.09f,GOLD,false);}
-            button("exit","Ⅱ",w*.91f,h*.06f,w*.055f,h*.09f,WHITE,false);
+            // One joystick on the left and one action control on the right; no overlapping arrow pad.
             drawJoystick(w,h);
+            button("action","ДЕЙСТВИЕ",w*.755f,h*.755f,w*.19f,h*.115f,MINT,true);
+            if(soloMode){button("switchPlayer",soloBlue?"ИГРОК: СИНИЙ  ↔":"ИГРОК: КРАСНЫЙ  ↔",w*.65f,h*.06f,w*.23f,h*.09f,GOLD,false);}
+            button("exit","Ⅱ",w*.91f,h*.06f,w*.055f,h*.09f,WHITE,false);
             text("ХОДЫ "+moves,w*.43f,h*.92f,12,MUTED,true);
             text("ЦЕЛЬ: "+goalText(),w*.42f,h*.98f,13,GOLD,true);
             if(room==2 && !pathHint) center(red?"ТЫ ВИДИШЬ МОСТ — ВЕДИ СИНЕГО":"ПУТЬ НЕ ВИДЕН • СЛУШАЙ НАПАРНИКА",w*.55f,h*.25f,14,GOLD,true);
@@ -224,11 +220,11 @@ public class MainActivity extends Activity {
             float doorX=(l+r)/2, doorY=t+(b-t)*.24f;
             rect(doorX-(r-l)*.075f,doorY,doorX+(r-l)*.075f,t+(b-t)*.59f,8,doorOpen?Color.rgb(31,95,84):Color.rgb(8,13,24));
             stroke(doorX-(r-l)*.075f,doorY,doorX+(r-l)*.075f,t+(b-t)*.59f,8,doorOpen?MINT:BLUE,3);
-            if(room==0||room==4){drawCube3D(l+(r-l)*.285f,t+(b-t)*.77f,(r-l)*.105f,14,9,RED);drawCube3D(l+(r-l)*.715f,t+(b-t)*.77f,(r-l)*.105f,14,9,BLUE);center("A",l+(r-l)*.285f,t+(b-t)*.77f+3,11,WHITE,true);center("B",l+(r-l)*.715f,t+(b-t)*.77f+3,11,WHITE,true);}
-            if(room==1){drawCube3D(l+(r-l)*.23f,t+(b-t)*.42f,(r-l)*.20f,12,23,GOLD);center("4  1  7",l+(r-l)*.23f,t+(b-t)*.36f,18,GOLD,true);}
-            if(room==2){for(int i=0;i<5;i++){float xx=l+(r-l)*(.30f+i*.09f);float yy=t+(b-t)*(.62f+i*.055f);drawCube3D(xx,yy,(r-l)*.045f,8,5,(pathHint||i==0)?MINT:Color.rgb(70,91,119));if(pathHint)center(""+(i+1),xx,yy-7,9,WHITE,true);}}
-            if(room==3){drawCube3D(l+(r-l)*.245f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverLeft?MINT:GOLD);drawCube3D(r-(r-l)*.245f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverRight?MINT:BLUE);}
-            if(room==5){drawCube3D((l+r)/2,t+(b-t)*.58f,(r-l)*.16f,18,36,doorOpen?MINT:BLUE);}
+            if(room==0||room==4){drawCube3D(l+(r-l)*.285f,t+(b-t)*.77f,(r-l)*.105f,(b-t)*.055f,(b-t)*.075f,RED);drawCube3D(l+(r-l)*.715f,t+(b-t)*.77f,(r-l)*.105f,(b-t)*.055f,(b-t)*.075f,BLUE);center("A",l+(r-l)*.285f,t+(b-t)*.77f+3,11,WHITE,true);center("B",l+(r-l)*.715f,t+(b-t)*.77f+3,11,WHITE,true);}
+            if(room==1){drawCube3D(l+(r-l)*.23f,t+(b-t)*.42f,(r-l)*.20f,(b-t)*.045f,(b-t)*.12f,GOLD);center("4  1  7",l+(r-l)*.23f,t+(b-t)*.36f,18,GOLD,true);}
+            if(room==2){for(int i=0;i<5;i++){float xx=l+(r-l)*(.30f+i*.09f);float yy=t+(b-t)*(.62f+i*.055f);drawCube3D(xx,yy,(r-l)*.045f,(b-t)*.025f,(b-t)*.03f,(pathHint||i==0)?MINT:Color.rgb(70,91,119));if(pathHint)center(""+(i+1),xx,yy-7,9,WHITE,true);}}
+            if(room==3){drawCube3D(l+(r-l)*.245f,t+(b-t)*.46f,(r-l)*.075f,(b-t)*.04f,(b-t)*.11f,leverLeft?MINT:GOLD);drawCube3D(r-(r-l)*.245f,t+(b-t)*.46f,(r-l)*.075f,(b-t)*.04f,(b-t)*.11f,leverRight?MINT:BLUE);}
+            if(room==5){drawCube3D((l+r)/2,t+(b-t)*.58f,(r-l)*.16f,(b-t)*.06f,(b-t)*.16f,doorOpen?MINT:BLUE);}
             float ax=l+(r-l)*(.22f+px*.54f), ay=t+(b-t)*(.58f+py*.25f);
             float bx=l+(r-l)*(.22f+ox*.54f), by=t+(b-t)*(.58f+oy*.25f);
             drawCharacter(ax,ay,red?RED:BLUE,(float)Math.sin(anim*2)*2,true);
@@ -345,30 +341,47 @@ public class MainActivity extends Activity {
         int brighten(int color){return Color.rgb(Math.min(255,Color.red(color)+35),Math.min(255,Color.green(color)+35),Math.min(255,Color.blue(color)+35));}
         void drawPlatform(float x,float y,float w,float h,boolean ignored){drawPlatform(x,y,w,h);}
         @Override public boolean onTouchEvent(android.view.MotionEvent e){
-            float x=e.getX(),y=e.getY();
-            if(e.getAction()==MotionEvent.ACTION_DOWN && !modalOpen && !showSettings && screen==3 && x<getWidth()*.34f && y>getHeight()*.60f){joystickActive=true;updateJoystick(x,y);lastStickMove=0;performJoystickMove();invalidate();return true;}
-            if(e.getAction()==MotionEvent.ACTION_MOVE && joystickActive){updateJoystick(x,y);performJoystickMove();invalidate();return true;}
-            if(e.getAction()==MotionEvent.ACTION_CANCEL){joystickActive=false;stickX=stickY=0;invalidate();return true;}
-            if(e.getAction()!=MotionEvent.ACTION_UP)return true;
-            if(joystickActive){updateJoystick(x,y);joystickActive=false;stickX=stickY=0;invalidate();return true;}
+            float x=e.getX(),y=e.getY(); int action=e.getActionMasked();
+            if(action==MotionEvent.ACTION_DOWN && !modalOpen && !showSettings && screen==3 && x<getWidth()*.31f && y>getHeight()*.60f){
+                joystickActive=true;updateJoystick(x,y);invalidate();return true;
+            }
+            if(action==MotionEvent.ACTION_MOVE && joystickActive){updateJoystick(x,y);invalidate();return true;}
+            if(action==MotionEvent.ACTION_CANCEL){joystickActive=false;stickX=stickY=0;invalidate();return true;}
+            if(action!=MotionEvent.ACTION_UP)return true;
+            if(joystickActive){joystickActive=false;stickX=stickY=0;invalidate();return true;}
             if(modalOpen){handleModalTouch(x,y);return true;}
             if(showSettings){showSettings=false;invalidate();return true;}
             for(Map.Entry<String,RectF> entry:buttons.entrySet())if(entry.getValue().contains(x,y)){click(entry.getKey());return true;}
-            if(screen==3){if(x<getWidth()*.5f){if(y>getHeight()*.60f){px=Math.max(.03f,Math.min(.95f,px+(x<getWidth()*.25f?-.06f:.06f)));moves++;sendState();}else{py=Math.max(.05f,py-.07f);moves++;sendState();}}else if(y>getHeight()*.58f){ox=Math.max(.03f,Math.min(.95f,ox+(x<getWidth()*.75f?-.05f:.05f)));moves++;sendState();}invalidate();}
+            // Empty screen taps no longer teleport/move a character unexpectedly.
             return true;
         }
         void drawJoystick(float w,float h){
-            float cx=w*.145f,cy=h*.815f,r=Math.min(w*.105f,h*.17f);
-            p.setColor(Color.argb(115,10,18,33));c.drawCircle(cx,cy,r+7,p);
-            p.setColor(Color.argb(185,24,39,62));c.drawCircle(cx,cy,r,p);
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(Color.argb(180,101,145,191));c.drawCircle(cx,cy,r,p);p.setStyle(Paint.Style.FILL);
-            c.drawLine(cx-r*.63f,cy,cx+r*.63f,cy,p);c.drawLine(cx,cy-r*.63f,cx,cy+r*.63f,p);
-            float kx=cx+stickX*r*.63f,ky=cy+stickY*r*.63f;
-            p.setShader(new LinearGradient(kx-r*.36f,ky-r*.36f,kx+r*.36f,ky+r*.36f,Color.rgb(101,230,221),Color.rgb(43,120,190),Shader.TileMode.CLAMP));c.drawCircle(kx,ky,r*.36f,p);p.setShader(null);
-            center("ДВИЖЕНИЕ",cx,cy+r+20,Math.min(12,w*.016f),WHITE,true);
+            float cx=w*.15f,cy=h*.78f,r=Math.min(w*.075f,h*.10f);
+            p.setColor(Color.argb(105,5,12,25));c.drawCircle(cx,cy,r+9,p);
+            p.setColor(Color.argb(205,24,39,62));c.drawCircle(cx,cy,r,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);p.setColor(Color.argb(220,101,175,211));c.drawCircle(cx,cy,r,p);p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.argb(95,96,255,210));c.drawCircle(cx,cy,r*.58f,p);
+            c.drawLine(cx-r*.58f,cy,cx+r*.58f,cy,p);c.drawLine(cx,cy-r*.58f,cx,cy+r*.58f,p);
+            float kx=cx+stickX*r*.58f,ky=cy+stickY*r*.58f;
+            p.setShader(new LinearGradient(kx-r*.34f,ky-r*.34f,kx+r*.34f,ky+r*.34f,Color.rgb(130,255,232),Color.rgb(43,120,190),Shader.TileMode.CLAMP));c.drawCircle(kx,ky,r*.34f,p);p.setShader(null);
         }
-        void updateJoystick(float x,float y){float cx=getWidth()*.145f,cy=getHeight()*.815f,r=Math.min(getWidth()*.105f,getHeight()*.17f);stickX=Math.max(-1,Math.min(1,(x-cx)/r));stickY=Math.max(-1,Math.min(1,(y-cy)/r));}
-        void performJoystickMove(){long now=System.currentTimeMillis();if(now-lastStickMove<145)return;float dx=Math.abs(stickX)>.30f?(stickX>0?.055f:-.055f):0;float dy=Math.abs(stickY)>.30f?(stickY>0?.055f:-.055f):0;if(dx==0&&dy==0)return;movePlayer(dx,dy);lastStickMove=now;}
+        void updateJoystick(float x,float y){
+            float cx=getWidth()*.15f,cy=getHeight()*.78f,r=Math.min(getWidth()*.075f,getHeight()*.10f);
+            stickX=(x-cx)/r;stickY=(y-cy)/r;
+            float len=(float)Math.sqrt(stickX*stickX+stickY*stickY);
+            if(len>1f){stickX/=len;stickY/=len;}
+        }
+        void updateJoystickMovement(float dt,long now){
+            float len=(float)Math.sqrt(stickX*stickX+stickY*stickY);
+            if(len<0.16f)return;
+            float strength=Math.min(1f,(len-0.16f)/0.84f);
+            float speed=0.58f*strength;
+            float dx=(stickX/len)*speed*dt,dy=(stickY/len)*speed*dt;
+            if(soloMode&&soloBlue){ox=Math.max(.025f,Math.min(.975f,ox+dx));oy=Math.max(.05f,Math.min(.95f,oy+dy));}
+            else{px=Math.max(.025f,Math.min(.975f,px+dx));py=Math.max(.05f,Math.min(.95f,py+dy));}
+            if(now-lastMoveCount>300){moves++;lastMoveCount=now;}
+            if(!soloMode&&now-lastNetworkMove>100){sendState();lastNetworkMove=now;}
+        }
         void movePlayer(float dx,float dy){if(soloMode&&soloBlue){ox=Math.max(.03f,Math.min(.97f,ox+dx));oy=Math.max(.05f,Math.min(.95f,oy+dy));}else{px=Math.max(.03f,Math.min(.97f,px+dx));py=Math.max(.05f,Math.min(.95f,py+dy));}moves++;if(!soloMode)sendState();}
         boolean playersOnPlates(){return red?(px<.20f&&ox>.80f):(px>.80f&&ox<.20f);}
         void click(String id){
