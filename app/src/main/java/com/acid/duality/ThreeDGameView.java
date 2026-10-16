@@ -336,7 +336,7 @@ public class ThreeDGameView extends GLSurfaceView {
             GLES20.glUniform3f(lightLoc,-.35f,1f,.22f);GLES20.glUniform3f(eyeLoc,camX,eyeY,camZ);
             // Damp forest floor, moss patches, stones and dense tree lines.
             box(0,-.34f,-37,58,.6f,94,new float[]{.16f,.19f,.13f,1});
-            for(int i=0;i<65;i++){
+            for(int i=0;i<36;i++){
                 float z=5f-(i/5)*6.1f;
                 float x=-25f+(i%5)*12.3f+((i%2)*1.8f);
                 if(Math.abs(x)<4.5f && z>-18) x+=x<0?-5.5f:5.5f;
@@ -347,7 +347,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 float x=(i%2==0?-1:1)*(5.2f+(i%4)*1.3f);
                 tree(x,z,3.0f+(i%3)*.55f,i+90);
             }
-            for(int i=0;i<34;i++){
+            for(int i=0;i<20;i++){
                 float x=(float)Math.sin(i*12.73f)*20f;
                 float z=2f-(i*2.31f)%76f;
                 float scale=.35f+(i%5)*.13f;
@@ -396,15 +396,13 @@ public class ThreeDGameView extends GLSurfaceView {
         void tree(float x,float z,float h,int seed){
             float trunk=.28f+(seed%3)*.07f;
             box(x,h*.42f,z,trunk,h*.9f,trunk,new float[]{.25f,.18f,.11f,1});
-            box(x-.35f,h*.58f,z+.12f,.16f,h*.35f,.18f,new float[]{.27f,.19f,.11f,1});
-            box(x+.38f,h*.64f,z-.08f,.15f,h*.32f,.16f,new float[]{.27f,.19f,.11f,1});
             float green=.19f+(seed%4)*.025f;
             box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});
             box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});
             box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});
         }
         boolean nearTree(float x,float z){
-            for(int i=0;i<65;i++){
+            for(int i=0;i<36;i++){
                 float tz=5f-(i/5)*6.1f;
                 float tx=-25f+(i%5)*12.3f+((i%2)*1.8f);
                 if(Math.abs(tx)<4.5f && tz>-18) tx+=tx<0?-5.5f:5.5f;
