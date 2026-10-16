@@ -28,7 +28,7 @@ public class ThreeDGameView extends GLSurfaceView {
         super(context);
         setEGLContextClientVersion(2);
         setPreserveEGLContextOnPause(true);
-        renderer = new World();
+        renderer = new World(this);
         setRenderer(renderer);
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         setFocusable(true);
@@ -126,6 +126,8 @@ public class ThreeDGameView extends GLSurfaceView {
     }
 
     static class World implements GLSurfaceView.Renderer {
+        private final ThreeDGameView game;
+        World(ThreeDGameView game){this.game=game;}
         private final float[] projection=new float[16],view=new float[16],model=new float[16],mv=new float[16],mvp=new float[16];
         private int program,posLoc,colorLoc,mvpLoc,lightLoc;
         private FloatBuffer vertices;
@@ -157,10 +159,10 @@ public class ThreeDGameView extends GLSurfaceView {
         @Override public void onSurfaceChanged(GL10 gl,int w,int h){GLES20.glViewport(0,0,w,h);Matrix.perspectiveM(projection,0,58f,(float)w/Math.max(1,h),0.1f,100f);}
         @Override public void onDrawFrame(GL10 gl){
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);elapsed+=0.025f;
-            if(playing){
-                px+=stickX*0.075f; pz+=stickY*0.075f;
+            if(game.playing){
+                px+=game.stickX*0.075f; pz+=game.stickY*0.075f;
                 px=Math.max(-4.5f,Math.min(4.5f,px));pz=Math.min(-1.0f,Math.max(-42f,pz));
-                playerX=px;playerZ=pz;
+                game.playerX=px;game.playerZ=pz;
             }
             Matrix.setLookAtM(view,0,px+5.0f,5.1f,pz+7.3f,px,0.9f,pz-1.4f,0,1,0);
             GLES20.glUseProgram(program);GLES20.glEnableVertexAttribArray(posLoc);vertices.position(0);GLES20.glVertexAttribPointer(posLoc,3,GLES20.GL_FLOAT,false,12,vertices);
