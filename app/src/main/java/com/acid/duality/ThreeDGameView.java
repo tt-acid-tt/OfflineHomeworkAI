@@ -1,17 +1,22 @@
 package com.acid.duality;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.LinearGradient;
 import android.graphics.Shader;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.text.InputType;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.Gravity;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -20,196 +25,301 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 public class ThreeDGameView extends GLSurfaceView {
-    volatile boolean playing=false, completed=false, actionPulse=false;
-    volatile float stickX=0, stickY=0, playerX=0, playerZ=-2;
-    volatile int room=0, moves=0;
-    private final World renderer;
+    volatile int screen=0; // 0 menu, 1 room lobby, 2 game
+    volatile int stage=0, moves=0;
+    volatile boolean started=false, solo=false, ready=false;
+    volatile float stickX=0, stickY=0, playerX=0, playerZ=0, yaw=0, pitch=0;
+    volatile float peerX=0, peerZ=-7, peerYaw=0;
+    volatile boolean peerReady=false;
+    volatile String notice="Создайте комнату или подключитесь к другу";
+    volatile boolean nearInteract=false;
+    final LanSession lan = new LanSession();
+    final World renderer;
+    final Hud hud;
+
     public ThreeDGameView(Context context) {
         super(context);
         setEGLContextClientVersion(2);
         setPreserveEGLContextOnPause(true);
-        renderer = new World(this);
+        renderer=new World(this);
         setRenderer(renderer);
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+        hud=new Hud(context,this);
         setFocusable(true);
     }
-    void startGame(){ playing=true; completed=false; playerX=0; playerZ=-2; room=0; moves=0; stickX=stickY=0; }
-    void resetToMenu(){ playing=false; stickX=stickY=0; }
-    void action(){
-        if(!playing) { startGame(); return; }
-        moves++;
-        actionPulse=true;
-        if(playerZ < -7.0f*(room+1)+2.3f && room<5) { room++; }
-        if(room>=5 && playerZ < -36) completed=true;
+    void hostRoom() {
+        solo=false; started=false; screen=1; stage=0; ready=false; moves=0;
+        playerX=0; playerZ=0; yaw=0; pitch=0;
+        lan.host();
+        notice="Комната создана";
+        hud.invalidate();
+    }
+    void joinRoom(String ip) {
+        solo=false; started=false; screen=1; stage=0; ready=false;
+        playerX=0; playerZ=0; yaw=0; pitch=0;
+        lan.join(ip);
+        notice="Подключение...";
+        hud.invalidate();
+    }
+    void beginSolo() {
+        lan.close(); solo=true; started=true; screen=2; stage=0; ready=false; moves=0;
+        playerX=0; playerZ=0; yaw=0; pitch=0; stickX=stickY=0;
+        notice="Тренировка: пройдите по светящимся меткам";
+        hud.invalidate();
+    }
+    void startOnlineGame() {
+        if(lan.hosting && lan.connected) { started=true; screen=2; stage=0; ready=false; playerX=0;playerZ=0;yaw=0;pitch=0;notice="Вместе откройте шлюзы"; }
+        hud.invalidate();
+    }
+    void backToMenu() {
+        lan.close(); screen=0; started=false; solo=false; ready=false; stickX=stickY=0;
+        notice="Создайте комнату или подключитесь к другу"; hud.invalidate();
+    }
+    void interact() {
+        if(screen!=2 || !nearInteract) return;
+        if(stage==1 || stage==2) { ready=true; moves++; notice=stage==1?"Консоль активирована — партнёр, удерживай плиту!":"Панель синхронизирована"; }
+        else if(stage>=3) { stage=0; ready=false; playerX=0;playerZ=0;notice="Начинаем заново"; }
+        hud.invalidate();
+    }
+    void packetTick() {
+        if(!solo && lan.connected) {
+            lan.setOutgoing(String.format(Locale.US,"%.3f,%.3f,%.3f,%d,%d,%d",playerX,playerZ,yaw,stage,started?1:0,ready?1:0));
+            String[] p=lan.remote.split(",");
+            if(p.length>=6) try {
+                peerX=Float.parseFloat(p[0]); peerZ=Float.parseFloat(p[1]); peerYaw=Float.parseFloat(p[2]);
+                int remoteStage=Integer.parseInt(p[3]); boolean remoteStarted=Integer.parseInt(p[4])==1;
+                peerReady=Integer.parseInt(p[5])==1;
+                if(!lan.hosting) { stage=remoteStage; started=remoteStarted; if(started) screen=2; }
+            } catch(Exception ignored) {}
+        }
     }
 
     static class Hud extends View {
-        final ThreeDGameView game; final Paint p=new Paint(3);
-        float downX,downY,baseX,baseY; boolean dragging=false;
-        Hud(Context c,ThreeDGameView g){super(c);game=g;setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-        void round(Canvas c,float l,float t,float r,float b,float rad,int color){
-            p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(color);c.drawRoundRect(l,t,r,b,rad,rad,p);
-        }
-        void label(Canvas c,String s,float x,float y,float size,int color,boolean bold){
-            p.setShader(null);p.setColor(color);p.setTextSize(size);p.setTypeface(bold?android.graphics.Typeface.create("sans-serif",1):android.graphics.Typeface.create("sans-serif",0));c.drawText(s,x,y,p);
-        }
-        void center(Canvas c,String s,float x,float y,float size,int color,boolean bold){
-            p.setTextSize(size);p.setTypeface(bold?android.graphics.Typeface.create("sans-serif",1):android.graphics.Typeface.create("sans-serif",0));label(c,s,x-p.measureText(s)/2,y,size,color,bold);
-        }
+        final ThreeDGameView g; final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        float sx,sy,lastX,lastY; boolean stick=false,look=false; int lookPointer=-1;
+        Hud(Context c,ThreeDGameView game){super(c);g=game;setLayerType(View.LAYER_TYPE_SOFTWARE,null);setFocusable(true);}
+        void fill(Canvas c,float l,float t,float r,float b,float rad,int col){p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(col);c.drawRoundRect(l,t,r,b,rad,rad,p);}
+        void stroke(Canvas c,float l,float t,float r,float b,float rad,int col,float sw){p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sw);p.setColor(col);c.drawRoundRect(l,t,r,b,rad,rad,p);p.setStyle(Paint.Style.FILL);}
+        void text(Canvas c,String s,float x,float y,float size,int color,boolean bold){p.setShader(null);p.setColor(color);p.setTextSize(size);p.setTypeface(Typeface.create("sans-serif",bold?Typeface.BOLD:Typeface.NORMAL));c.drawText(s,x,y,p);}
+        void center(Canvas c,String s,float x,float y,float size,int color,boolean bold){p.setTextSize(size);p.setTypeface(Typeface.create("sans-serif",bold?Typeface.BOLD:Typeface.NORMAL));text(c,s,x-p.measureText(s)/2,y,size,color,bold);}
         @Override protected void onDraw(Canvas c){
-            super.onDraw(c);float w=getWidth(),h=getHeight();
-            if(!game.playing){
-                p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(8,15,32),Color.rgb(15,30,53),Color.rgb(26,17,43)},null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);
-                p.setColor(Color.argb(60,50,230,255));c.drawCircle(w*.77f,h*.46f,h*.36f,p);
-                p.setColor(Color.argb(50,255,65,100));c.drawCircle(w*.68f,h*.48f,h*.25f,p);
-                label(c,"DUALITY",w*.09f,h*.28f,Math.min(70,w*.085f),Color.WHITE,true);
-                round(c,w*.095f,h*.315f,w*.25f,h*.328f,5,Color.rgb(82,255,218));
-                label(c,"TWO MINDS. ONE WAY OUT.",w*.10f,h*.39f,Math.min(20,w*.027f),Color.rgb(82,255,218),true);
-                label(c,"Настоящее 3D • кооперативная головоломка",w*.10f,h*.47f,Math.min(20,w*.025f),Color.rgb(205,220,242),false);
-                round(c,w*.10f,h*.59f,w*.36f,h*.73f,22,Color.rgb(82,255,218));
-                center(c,"▶  ИГРАТЬ",w*.23f,h*.675f,Math.min(24,w*.03f),Color.rgb(7,19,31),true);
-                label(c,"OPENGL ES 2.0  •  3D WORLD",w*.10f,h*.84f,13,Color.rgb(130,153,185),true);
-                // Stylized hero silhouettes; actual animated 3D heroes are rendered behind this overlay.
-                round(c,w*.68f,h*.39f,w*.75f,h*.62f,18,Color.argb(160,18,33,56));
-                center(c,"01",w*.715f,h*.69f,18,Color.rgb(255,83,108),true);
-                round(c,w*.79f,h*.36f,w*.86f,h*.62f,18,Color.argb(160,18,33,56));
-                center(c,"02",w*.825f,h*.69f,18,Color.rgb(78,160,255),true);
+            super.onDraw(c); float w=getWidth(),h=getHeight();
+            if(g.screen==0){
+                p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(5,11,25),Color.rgb(11,28,47),Color.rgb(26,16,42)},null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);
+                p.setColor(Color.argb(24,40,238,218));c.drawCircle(w*.78f,h*.42f,h*.48f,p);
+                text(c,"DUALITY",w*.085f,h*.24f,Math.min(70,w*.09f),Color.WHITE,true);
+                fill(c,w*.09f,h*.275f,w*.24f,h*.285f,5,Color.rgb(70,255,214));
+                text(c,"TWO MINDS. ONE WAY OUT.",w*.09f,h*.35f,Math.min(19,w*.025f),Color.rgb(70,255,214),true);
+                text(c,"Кооперативная 3D-головоломка",w*.09f,h*.43f,Math.min(20,w*.026f),Color.rgb(211,225,245),false);
+                float bw=w*.30f,bx=w*.09f,top=h*.52f,bh=h*.105f,gap=h*.025f;
+                fill(c,bx,top,bx+bw,top+bh,18,Color.rgb(70,255,214));center(c,"СОЗДАТЬ КОМНАТУ",bx+bw/2,top+bh*.64f,Math.min(20,w*.025f),Color.rgb(4,20,31),true);
+                fill(c,bx,top+bh+gap,bx+bw,top+2*bh+gap,18,Color.argb(220,28,46,69));stroke(c,bx,top+bh+gap,bx+bw,top+2*bh+gap,18,Color.argb(100,120,200,230),1);
+                center(c,"ПОДКЛЮЧИТЬСЯ ПО IP",bx+bw/2,top+bh+gap+bh*.64f,Math.min(19,w*.023f),Color.WHITE,true);
+                fill(c,bx,top+2*(bh+gap),bx+bw,top+3*bh+2*gap,18,Color.argb(130,28,46,69));
+                center(c,"ТРЕНИРОВКА",bx+bw/2,top+2*(bh+gap)+bh*.64f,Math.min(19,w*.023f),Color.rgb(202,216,239),true);
+                // Clean two-character key art, only on menu.
+                drawMenuHero(c,w*.72f,h*.54f,Color.rgb(255,73,107),1.0f);
+                drawMenuHero(c,w*.84f,h*.49f,Color.rgb(65,145,255),0.88f);
+                text(c,"ОДНА СЕТЬ Wi-Fi  •  ДВА ИГРОКА",w*.58f,h*.84f,Math.min(16,w*.019f),Color.rgb(155,180,212),true);
+            } else if(g.screen==1){
+                p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(5,12,25),Color.rgb(10,27,44)},null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);
+                text(c,"КОМНАТА DUALITY",w*.09f,h*.22f,Math.min(38,w*.05f),Color.WHITE,true);
+                text(c,g.lan.hosting?"Передай другу IP-адрес ниже. Оба телефона должны быть в одной Wi-Fi сети.":"Подключаемся к комнате друга в этой же Wi-Fi сети.",w*.09f,h*.32f,Math.min(18,w*.022f),Color.rgb(194,213,237),false);
+                if(g.lan.hosting){text(c,"ТВОЙ IP: "+LanSession.localIp(),w*.09f,h*.44f,Math.min(26,w*.033f),Color.rgb(70,255,214),true);text(c,"ПОРТ: "+LanSession.PORT,w*.09f,h*.50f,18,Color.WHITE,true);}
+                text(c,g.lan.status,w*.09f,h*.60f,Math.min(19,w*.024f),g.lan.connected?Color.rgb(70,255,214):Color.rgb(255,195,104),true);
+                if(g.lan.hosting && g.lan.connected){
+                    fill(c,w*.62f,h*.68f,w*.88f,h*.81f,18,Color.rgb(70,255,214));center(c,"НАЧАТЬ ИГРУ",w*.75f,h*.755f,19,Color.rgb(4,20,31),true);
+                } else if(!g.lan.hosting && g.lan.connected){
+                    center(c,"Ждём, пока создатель комнаты начнёт игру…",w*.5f,h*.77f,18,Color.WHITE,false);
+                }
+                fill(c,w*.09f,h*.77f,w*.27f,h*.86f,14,Color.argb(180,33,49,70));center(c,"НАЗАД",w*.18f,h*.825f,18,Color.WHITE,true);
             } else {
-                round(c,20,18,245,75,16,Color.argb(180,8,16,31));
-                label(c,"DUALITY  /  "+(game.room+1)+"/6",38,43,17,Color.WHITE,true);
-                label(c,"Шаги: "+game.moves,38,63,12,Color.rgb(142,255,224),false);
-                round(c,w*.39f,18,w*.61f,59,15,Color.argb(160,8,16,31));
-                center(c,game.completed?"ВЫ ВЫБРАЛИСЬ!":"НАЙДИТЕ ВЫХОД И РЕШАЙТЕ ЗАГАДКИ",w*.50f,44,Math.min(15,w*.018f),Color.WHITE,true);
-                // Left joystick, with a clear fixed base and a separate movable knob.
-                float bx=Math.min(118,w*.13f), by=h-105;
-                p.setShader(null);p.setColor(Color.argb(75,180,210,245));c.drawCircle(bx,by,67,p);
-                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(Color.argb(125,200,225,255));c.drawCircle(bx,by,67,p);p.setStyle(Paint.Style.FILL);
-                c.drawCircle(bx+game.stickX*34,by+game.stickY*34,29,p);p.setColor(Color.argb(230,222,238,255));c.drawCircle(bx+game.stickX*34,by+game.stickY*34,22,p);
-                round(c,w-184,h-139,w-34,h-61,26,Color.rgb(76,158,255));
-                center(c,"ДЕЙСТВИЕ",w-109,h-92,17,Color.WHITE,true);
-                center(c,"Двигайтесь к светящейся двери",w*.5f,h-24,14,Color.argb(220,225,235,255),false);
-                if(game.completed){
-                    round(c,w*.35f,h*.25f,w*.65f,h*.72f,25,Color.argb(235,10,19,36));
-                    center(c,"ГОЛОВОЛОМКА РЕШЕНА",w*.5f,h*.40f,25,Color.rgb(82,255,218),true);
-                    center(c,"Вы нашли выход из комплекса",w*.5f,h*.49f,17,Color.WHITE,false);
-                    round(c,w*.42f,h*.56f,w*.58f,h*.65f,16,Color.rgb(82,255,218));
-                    center(c,"СНАЧАЛА",w*.5f,h*.615f,17,Color.rgb(7,19,31),true);
+                // In-game overlay is intentionally sparse: world stays full-bleed.
+                fill(c,18,16,Math.min(w*.43f,430),88,15,Color.argb(205,5,13,27));
+                text(c,"DUALITY  /  "+(Math.min(g.stage+1,3))+" из 3",34,42,17,Color.WHITE,true);
+                String objective=g.stage==0?"ДВА ИГРОКА: ВСТАНЬТЕ НА РАЗНЫЕ ПЛИТЫ":g.stage==1?"ОДИН НА ПЛИТЕ • ВТОРОЙ АКТИВИРУЕТ КОНСОЛЬ":g.stage==2?"ОБА ИГРОКА АКТИВИРУЙТЕ СВОИ ПАНЕЛИ":"ШЛЮЗ ОТКРЫТ — ВЫБИРАЙТЕСЬ!";
+                text(c,objective,34,66,Math.min(13,w*.016f),Color.rgb(109,255,221),true);
+                if(!g.solo && !g.lan.connected){fill(c,w*.36f,16,w*.64f,53,12,Color.argb(210,80,30,39));center(c,"СВЯЗЬ ПОТЕРЯНА",w*.5f,39,13,Color.WHITE,true);}
+                // Left movement stick.
+                float bx=Math.min(112,w*.12f),by=h-100;
+                p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(72,185,215,245));c.drawCircle(bx,by,62,p);
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(Color.argb(135,185,225,255));c.drawCircle(bx,by,62,p);p.setStyle(Paint.Style.FILL);
+                p.setColor(Color.argb(235,214,236,255));c.drawCircle(bx+g.stickX*32,by+g.stickY*32,23,p);
+                center(c,"ДВИЖЕНИЕ",bx,by+88,11,Color.argb(220,220,235,250),true);
+                // Look zone hint, no extra directional buttons.
+                center(c,"ПРОВЕДИ ПАЛЬЦЕМ — ПОВОРОТ КАМЕРЫ",w*.69f,h-20,Math.min(13,w*.016f),Color.argb(185,225,236,250),true);
+                if(g.nearInteract){
+                    fill(c,w-196,h-124,w-28,h-54,19,Color.rgb(70,255,214));
+                    center(c,"◉  ВЗАИМОДЕЙСТВОВАТЬ",w-112,h-82,Math.min(15,w*.018f),Color.rgb(4,20,31),true);
+                }
+                if(g.stage>=3){
+                    fill(c,w*.30f,h*.25f,w*.70f,h*.70f,26,Color.argb(235,6,17,31));
+                    center(c,"ШЛЮЗ ОТКРЫТ!",w*.5f,h*.40f,30,Color.rgb(70,255,214),true);
+                    center(c,"Вы решили все кооперативные загадки.",w*.5f,h*.49f,17,Color.WHITE,false);
+                    fill(c,w*.42f,h*.56f,w*.58f,h*.65f,15,Color.rgb(70,255,214));center(c,"ЗАНОВО",w*.5f,h*.615f,17,Color.rgb(4,20,31),true);
                 }
             }
-            postInvalidateDelayed(32);
+            postInvalidateDelayed(50);
+        }
+        void drawMenuHero(Canvas c,float x,float y,int col,float scale){
+            float s=scale;fill(c,x-28*s,y-20*s,x+28*s,y+46*s,12,Color.argb(210,25,39,62));
+            fill(c,x-21*s,y-70*s,x+21*s,y-28*s,12,Color.rgb(225,236,248));
+            fill(c,x-29*s,y-23*s,x+29*s,y+24*s,10,col);
+            fill(c,x-20*s,y+23*s,x-5*s,y+63*s,5,Color.rgb(75,92,119));fill(c,x+5*s,y+23*s,x+20*s,y+63*s,5,Color.rgb(75,92,119));
+            fill(c,x-10*s,y-53*s,x+10*s,y-45*s,3,Color.rgb(60,255,220));
+        }
+        void askIp(){
+            EditText input=new EditText(getContext());input.setSingleLine(true);input.setInputType(InputType.TYPE_CLASS_TEXT);
+            input.setHint("Например: 192.168.1.25");input.setTextColor(Color.WHITE);input.setHintTextColor(Color.GRAY);
+            AlertDialog d=new AlertDialog.Builder(getContext()).setTitle("Подключиться к другу").setMessage("Введи IP телефона, который создал комнату. Оба телефона должны быть в одной Wi-Fi сети.").setView(input).setNegativeButton("Отмена",null).setPositiveButton("Подключить",(dialog,which)->g.joinRoom(input.getText().toString())).create();
+            d.setOnShowListener(v->{d.getWindow().setBackgroundDrawableResource(android.R.color.background_dark);d.getButton(-1).setTextColor(Color.rgb(70,210,190));d.getButton(-2).setTextColor(Color.LTGRAY);});d.show();
         }
         @Override public boolean onTouchEvent(MotionEvent e){
             float x=e.getX(),y=e.getY(),w=getWidth(),h=getHeight();
-            if(!game.playing){
-                if(e.getAction()==MotionEvent.ACTION_UP){if(x>w*.07f&&x<w*.43f&&y>h*.53f&&y<h*.79f)game.startGame();invalidate();return true;}return true;
+            if(g.screen==0){
+                if(e.getAction()==MotionEvent.ACTION_UP){
+                    float bx=w*.09f,bw=w*.30f,top=h*.52f,bh=h*.105f,gap=h*.025f;
+                    if(x>=bx&&x<=bx+bw&&y>=top&&y<=top+bh)g.hostRoom();
+                    else if(x>=bx&&x<=bx+bw&&y>=top+bh+gap&&y<=top+2*bh+gap)askIp();
+                    else if(x>=bx&&x<=bx+bw&&y>=top+2*(bh+gap)&&y<=top+3*bh+2*gap)g.beginSolo();
+                }return true;
             }
-            float bx=Math.min(118,w*.13f),by=h-105;
+            if(g.screen==1){
+                if(e.getAction()==MotionEvent.ACTION_UP){
+                    if(x<w*.30f&&y>h*.75f)g.backToMenu();
+                    else if(g.lan.hosting&&g.lan.connected&&x>w*.60f&&y>h*.65f)g.startOnlineGame();
+                }return true;
+            }
             switch(e.getActionMasked()){
                 case MotionEvent.ACTION_DOWN:
-                    downX=x;downY=y;
-                    if(x<w*.27f&&y>h*.48f){dragging=true;updateStick(x,y,bx,by);return true;}
-                    if(x>w*.70f&&y>h*.65f){if(game.completed)game.startGame();else game.action();invalidate();return true;}
-                    if(game.completed){game.startGame();invalidate();return true;}
-                    return true;
+                    lastX=x;lastY=y;
+                    if(g.nearInteract&&x>w*.68f&&y>h*.72f){g.interact();return true;}
+                    if(g.stage>=3&&x>w*.40f&&x<w*.60f&&y>h*.52f&&y<h*.70f){g.beginSolo();return true;}
+                    if(x<w*.27f&&y>h*.55f){stick=true;updateStick(x,y,w,h);return true;}
+                    look=true;lookPointer=e.getPointerId(e.getActionIndex());return true;
                 case MotionEvent.ACTION_MOVE:
-                    if(dragging)updateStick(x,y,bx,by);return true;
+                    if(stick)updateStick(x,y,w,h);
+                    else if(look){float dx=x-lastX,dy=y-lastY;g.yaw-=dx*.006f;g.pitch=Math.max(-0.72f,Math.min(0.72f,g.pitch+dy*.0045f));lastX=x;lastY=y;}
+                    return true;
                 case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
-                    dragging=false;game.stickX=game.stickY=0;invalidate();return true;
+                    stick=false;look=false;g.stickX=g.stickY=0;return true;
             }
             return true;
         }
-        void updateStick(float x,float y,float bx,float by){
-            float dx=x-bx,dy=y-by,len=(float)Math.sqrt(dx*dx+dy*dy),max=55;
-            if(len>max){dx=dx/len*max;dy=dy/len*max;}
-            game.stickX=dx/max;game.stickY=dy/max;
+        void updateStick(float x,float y,float w,float h){
+            float bx=Math.min(112,w*.12f),by=h-100,dx=x-bx,dy=y-by,len=(float)Math.sqrt(dx*dx+dy*dy),max=54;
+            if(len>max){dx=dx/len*max;dy=dy/len*max;}g.stickX=dx/max;g.stickY=-dy/max;
         }
     }
 
     static class World implements GLSurfaceView.Renderer {
-        private final ThreeDGameView game;
-        World(ThreeDGameView game){this.game=game;}
-        private final float[] projection=new float[16],view=new float[16],model=new float[16],mv=new float[16],mvp=new float[16];
-        private int program,posLoc,colorLoc,mvpLoc,lightLoc;
-        private FloatBuffer vertices;
-        private final float[] cube={
-            // front
-            -0.5f,-0.5f,0.5f, 0.5f,-0.5f,0.5f, 0.5f,0.5f,0.5f, -0.5f,-0.5f,0.5f, 0.5f,0.5f,0.5f, -0.5f,0.5f,0.5f,
-            // back
-            0.5f,-0.5f,-0.5f, -0.5f,-0.5f,-0.5f, -0.5f,0.5f,-0.5f, 0.5f,-0.5f,-0.5f, -0.5f,0.5f,-0.5f, 0.5f,0.5f,-0.5f,
-            // left
-            -0.5f,-0.5f,-0.5f, -0.5f,-0.5f,0.5f, -0.5f,0.5f,0.5f, -0.5f,-0.5f,-0.5f, -0.5f,0.5f,0.5f, -0.5f,0.5f,-0.5f,
-            // right
-            0.5f,-0.5f,0.5f, 0.5f,-0.5f,-0.5f, 0.5f,0.5f,-0.5f, 0.5f,-0.5f,0.5f, 0.5f,0.5f,-0.5f, 0.5f,0.5f,0.5f,
-            // top
-            -0.5f,0.5f,0.5f, 0.5f,0.5f,0.5f, 0.5f,0.5f,-0.5f, -0.5f,0.5f,0.5f, 0.5f,0.5f,-0.5f, -0.5f,0.5f,-0.5f,
-            // bottom
-            -0.5f,-0.5f,-0.5f, 0.5f,-0.5f,-0.5f, 0.5f,-0.5f,0.5f, -0.5f,-0.5f,-0.5f, 0.5f,-0.5f,0.5f, -0.5f,-0.5f,0.5f
-        };
-        private float px=0,pz=-2,elapsed=0;
-        private final String vs="attribute vec3 aPos; uniform mat4 uMVP; varying vec3 vPos; void main(){vPos=aPos; gl_Position=uMVP*vec4(aPos,1.0);}";
-        private final String fs="precision mediump float; uniform vec4 uColor; uniform vec3 uLight; varying vec3 vPos; void main(){float l=0.62+0.38*max(0.0,dot(normalize(vec3(vPos.x+0.5,vPos.y+0.5,vPos.z+0.5)),normalize(uLight))); gl_FragColor=vec4(uColor.rgb*l,uColor.a);}";
+        final ThreeDGameView g;
+        final float[] proj=new float[16],view=new float[16],model=new float[16],mv=new float[16],mvp=new float[16];
+        int program,posLoc,colorLoc,mvpLoc,lightLoc;
+        FloatBuffer vertices;
+        final float[] cube={
+        -0.5f,-0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,
+        0.5f,-0.5f,-0.5f,-0.5f,-0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,
+        -0.5f,-0.5f,-0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f,-0.5f,-0.5f,0.5f,0.5f,-0.5f,0.5f,-0.5f,
+        0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,0.5f,-0.5f,0.5f,-0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,0.5f,
+        -0.5f,0.5f,0.5f,0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f,0.5f,-0.5f,-0.5f,0.5f,-0.5f,
+        -0.5f,-0.5f,-0.5f,0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,0.5f};
+        float px=0,pz=0,elapsed=0;
+        final String vs="attribute vec3 aPos; uniform mat4 uMVP; varying vec3 vPos; void main(){vPos=aPos;gl_Position=uMVP*vec4(aPos,1.0);}";
+        final String fs="precision mediump float;uniform vec4 uColor;uniform vec3 uLight;varying vec3 vPos;void main(){float l=0.58+0.42*max(0.0,dot(normalize(vPos+vec3(0.51)),normalize(uLight)));gl_FragColor=vec4(uColor.rgb*l,uColor.a);}";
+        World(ThreeDGameView game){g=game;}
+        int shader(int type,String src){int s=GLES20.glCreateShader(type);GLES20.glShaderSource(s,src);GLES20.glCompileShader(s);return s;}
         @Override public void onSurfaceCreated(GL10 gl,EGLConfig cfg){
-            GLES20.glClearColor(0.025f,0.045f,0.09f,1);GLES20.glEnable(GLES20.GL_DEPTH_TEST);GLES20.glEnable(GLES20.GL_CULL_FACE);GLES20.glCullFace(GLES20.GL_BACK);
-            program=link(shader(GLES20.GL_VERTEX_SHADER,vs),shader(GLES20.GL_FRAGMENT_SHADER,fs));
+            GLES20.glClearColor(.018f,.035f,.07f,1);GLES20.glEnable(GLES20.GL_DEPTH_TEST);GLES20.glDisable(GLES20.GL_CULL_FACE);
+            int v=shader(GLES20.GL_VERTEX_SHADER,vs),f=shader(GLES20.GL_FRAGMENT_SHADER,fs);program=GLES20.glCreateProgram();GLES20.glAttachShader(program,v);GLES20.glAttachShader(program,f);GLES20.glLinkProgram(program);
             ByteBuffer b=ByteBuffer.allocateDirect(cube.length*4).order(ByteOrder.nativeOrder());vertices=b.asFloatBuffer();vertices.put(cube).position(0);
             posLoc=GLES20.glGetAttribLocation(program,"aPos");mvpLoc=GLES20.glGetUniformLocation(program,"uMVP");colorLoc=GLES20.glGetUniformLocation(program,"uColor");lightLoc=GLES20.glGetUniformLocation(program,"uLight");
         }
-        int shader(int type,String src){int s=GLES20.glCreateShader(type);GLES20.glShaderSource(s,src);GLES20.glCompileShader(s);return s;}
-        int link(int v,int f){int p=GLES20.glCreateProgram();GLES20.glAttachShader(p,v);GLES20.glAttachShader(p,f);GLES20.glLinkProgram(p);return p;}
-        @Override public void onSurfaceChanged(GL10 gl,int w,int h){GLES20.glViewport(0,0,w,h);Matrix.perspectiveM(projection,0,58f,(float)w/Math.max(1,h),0.1f,100f);}
+        @Override public void onSurfaceChanged(GL10 gl,int w,int h){GLES20.glViewport(0,0,w,h);Matrix.perspectiveM(proj,0,72,(float)w/Math.max(1,h),.1f,100);}
         @Override public void onDrawFrame(GL10 gl){
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);elapsed+=0.025f;
-            if(game.playing){
-                px+=game.stickX*0.075f; pz+=game.stickY*0.075f;
-                px=Math.max(-4.5f,Math.min(4.5f,px));pz=Math.min(-1.0f,Math.max(-42f,pz));
-                game.playerX=px;game.playerZ=pz;
-            }
-            Matrix.setLookAtM(view,0,px+5.0f,5.1f,pz+7.3f,px,0.9f,pz-1.4f,0,1,0);
-            GLES20.glUseProgram(program);GLES20.glEnableVertexAttribArray(posLoc);vertices.position(0);GLES20.glVertexAttribPointer(posLoc,3,GLES20.GL_FLOAT,false,12,vertices);
-            GLES20.glUniform3f(lightLoc,-0.4f,1.0f,0.35f);
-            // Seamless full-bleed floor, with repeating luminous floor panels.
-            box(0,-0.18f,-20,12,0.35f,48,new float[]{0.045f,0.075f,0.13f,1});
-            for(int i=0;i<24;i++){
-                float z=-i*2f;
-                box(0,0.005f,z,10.8f,0.025f,1.9f,new float[]{0.075f,0.12f,0.19f,1});
-                box(-5.1f,0.035f,z,0.035f,0.04f,1.7f,new float[]{0.08f,0.55f,0.64f,1});
-                box(5.1f,0.035f,z,0.035f,0.04f,1.7f,new float[]{0.08f,0.55f,0.64f,1});
-            }
-            // Tall corridor walls and repeated architectural ribs.
-            box(-5.7f,1.8f,-20,0.5f,3.8f,48,new float[]{0.10f,0.16f,0.27f,1});
-            box(5.7f,1.8f,-20,0.5f,3.8f,48,new float[]{0.10f,0.16f,0.27f,1});
-            for(int i=0;i<12;i++){float z=-i*4f-1;box(-5.35f,1.8f,z,0.16f,3.8f,0.18f,new float[]{0.11f,0.72f,0.77f,1});box(5.35f,1.8f,z,0.16f,3.8f,0.18f,new float[]{0.11f,0.72f,0.77f,1});}
-            // Colored puzzle gates, platforms and glowing beacons.
-            for(int i=0;i<6;i++){
-                float z=-7.5f-i*7f;
-                box(-2.7f,1.0f,z,0.12f,2.0f,0.22f,new float[]{0.95f,0.20f,0.34f,1});
-                box(2.7f,1.0f,z,0.12f,2.0f,0.22f,new float[]{0.20f,0.52f,1.0f,1});
-                box(0,2.1f,z,5.5f,0.12f,0.22f,new float[]{0.18f,0.25f,0.40f,1});
-                box((i%2==0)?-2.1f:2.1f,0.14f,z-2.4f,1.5f,0.28f,1.5f,i%2==0?new float[]{0.95f,0.20f,0.34f,1}:new float[]{0.20f,0.52f,1,1});
-                box(0,0.08f,z-3.2f,1.2f,0.16f,1.2f,new float[]{0.16f,0.8f,0.66f,1});
-            }
-            // Two stylized, genuinely 3D low-poly heroes made from lit meshes.
-            hero(px,0,pz,new float[]{1.0f,0.20f,0.32f,1},elapsed);
-            hero(px+1.2f,0,pz-0.5f,new float[]{0.20f,0.48f,1.0f,1},elapsed+1.2f);
-            // Door frame and animated portal at the end of the corridor.
-            float doorZ=-42f;
-            box(-1.5f,1.7f,doorZ,0.22f,3.4f,0.25f,new float[]{0.2f,0.8f,0.72f,1});
-            box(1.5f,1.7f,doorZ,0.22f,3.4f,0.25f,new float[]{0.2f,0.8f,0.72f,1});
-            box(0,3.35f,doorZ,3.2f,0.22f,0.25f,new float[]{0.2f,0.8f,0.72f,1});
-            box(0,1.6f,doorZ-0.05f,2.65f,2.9f,0.08f,new float[]{0.06f,0.6f,0.57f,1});
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);elapsed+=.025f;
+            if(g.screen==2 && g.started){
+                float speed=.075f,sy=g.stickY,sx=g.stickX;
+                float rightX=(float)Math.cos(g.yaw),rightZ=(float)Math.sin(g.yaw);
+                float forwardX=(float)Math.sin(g.yaw),forwardZ=-(float)Math.cos(g.yaw);
+                px+= (rightX*sx+forwardX*sy)*speed; pz+=(rightZ*sx+forwardZ*sy)*speed;
+                px=Math.max(-4.3f,Math.min(4.3f,px));pz=Math.max(-38f,Math.min(2f,pz));
+                g.playerX=px;g.playerZ=pz;g.packetTick();
+                if(g.solo){g.peerX=px<0?2.0f:-2.0f;g.peerZ=g.stage==0?-7:g.stage==1?-18:-30;g.peerReady=g.stage==2;}
+                if(!g.solo&&g.lan.hosting&&g.lan.connected) updateHostPuzzle();
+                if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* host publishes authoritative stage in each packet */ }
+                g.nearInteract=nearConsole(px,pz,g.stage);
+            } else {px=g.playerX;pz=g.playerZ;}
+            float eyeY=1.62f;
+            float cy=(float)Math.cos(g.yaw),sy=(float)Math.sin(g.yaw),cp=(float)Math.cos(g.pitch),sp=(float)Math.sin(g.pitch);
+            float tx=px+sy*cp,tz=pz-cy*cp,ty=eyeY+sp;
+            Matrix.setLookAtM(view,0,px,eyeY,pz,tx,ty,tz,0,1,0);
+            GLES20.glUseProgram(program);GLES20.glEnableVertexAttribArray(posLoc);vertices.position(0);GLES20.glVertexAttribPointer(posLoc,3,GLES20.GL_FLOAT,false,12,vertices);GLES20.glUniform3f(lightLoc,-.4f,1,.35f);
+            // Full-bleed environment with three readable puzzle stations.
+            box(0,-.18f,-19,12,.36f,48,new float[]{.035f,.065f,.11f,1});
+            for(int i=0;i<25;i++){float z=2-i*1.8f;box(0,.012f,z,10.7f,.025f,1.72f,new float[]{.065f,.105f,.16f,1});box(-5.15f,.04f,z,.045f,.05f,1.6f,new float[]{.06f,.65f,.68f,1});box(5.15f,.04f,z,.045f,.05f,1.6f,new float[]{.06f,.65f,.68f,1});}
+            box(-5.55f,1.8f,-19,.45f,3.7f,48,new float[]{.08f,.13f,.22f,1});box(5.55f,1.8f,-19,.45f,3.7f,48,new float[]{.08f,.13f,.22f,1});
+            for(int i=0;i<13;i++){float z=1-i*3.6f;box(-5.28f,1.8f,z,.13f,3.65f,.16f,new float[]{.09f,.58f,.68f,1});box(5.28f,1.8f,z,.13f,3.65f,.16f,new float[]{.09f,.58f,.68f,1});}
+            station(0,-7);
+            station(1,-18);
+            station(2,-30);
+            if(g.stage<1) gate(0,-11.5f);
+            if(g.stage<2) gate(1,-22.5f);
+            if(g.stage<3) gate(2,-34.5f);
+            if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.2f,.45f,1,1}:new float[]{1,.22f,.36f,1});
+            if(g.screen==2 && g.started && g.solo) remoteHero(g.peerX,g.peerZ,new float[]{.2f,.45f,1,1});
+            // Soft overhead lamps and destination portal.
+            for(int i=0;i<6;i++){float z=-i*6f-2;box(0,3.55f,z,2.2f,.08f,.42f,new float[]{.08f,.3f,.42f,1});}
+            box(-1.5f,1.7f,-40,.22f,3.4f,.22f,new float[]{.16f,.9f,.72f,1});box(1.5f,1.7f,-40,.22f,3.4f,.22f,new float[]{.16f,.9f,.72f,1});box(0,3.35f,-40,3.2f,.22f,.22f,new float[]{.16f,.9f,.72f,1});
             GLES20.glDisableVertexAttribArray(posLoc);
         }
-        void hero(float x,float y,float z,float[] col,float t){
-            box(x,y+0.86f+(float)Math.sin(t)*0.035f,z,0.62f,0.82f,0.42f,col);
-            box(x,y+1.48f+(float)Math.sin(t)*0.035f,z,0.49f,0.49f,0.44f,new float[]{0.83f,0.9f,0.98f,1});
-            box(x-0.38f,y+0.83f,z,0.16f,0.65f,0.18f,col);box(x+0.38f,y+0.83f,z,0.16f,0.65f,0.18f,col);
-            box(x-0.19f,y+0.25f,z,0.19f,0.5f,0.23f,new float[]{0.24f,0.31f,0.43f,1});
-            box(x+0.19f,y+0.25f,z,0.19f,0.5f,0.23f,new float[]{0.24f,0.31f,0.43f,1});
-            box(x,y+0.93f,z-0.22f,0.23f,0.18f,0.035f,new float[]{0.85f,1.0f,0.98f,1});
+        void updateHostPuzzle(){
+            float rx=g.peerX,rz=g.peerZ;
+            if(g.stage==0){
+                boolean left=(g.playerX < -1.2f && Math.abs(g.playerZ+7)<1.0f)||(rx < -1.2f && Math.abs(rz+7)<1.0f);
+                boolean right=(g.playerX > 1.2f && Math.abs(g.playerZ+7)<1.0f)||(rx > 1.2f && Math.abs(rz+7)<1.0f);
+                if(left&&right&&Math.abs(g.playerX-rx)>2.4f){g.stage=1;g.ready=false;g.notice="Шлюз 1 открыт! Ищите консоль и плиту."; }
+            } else if(g.stage==1){
+                boolean plate=(Math.abs(g.playerX+2)<1.1f&&Math.abs(g.playerZ+18)<1.1f)||(Math.abs(rx+2)<1.1f&&Math.abs(rz+18)<1.1f);
+                boolean console=(Math.abs(g.playerX-2)<1.3f&&Math.abs(g.playerZ+18)<1.4f)||(Math.abs(rx-2)<1.3f&&Math.abs(rz+18)<1.4f);
+                boolean activated=(Math.abs(g.playerX-2)<1.3f&&Math.abs(g.playerZ+18)<1.4f&&g.ready)||(Math.abs(rx-2)<1.3f&&Math.abs(rz+18)<1.4f&&g.peerReady);
+                if(plate&&console&&activated){g.stage=2;g.ready=false;g.notice="Шлюз 2 открыт! Синхронизируйте обе панели."; }
+            } else if(g.stage==2){
+                boolean a=(Math.abs(g.playerX+2)<1.35f&&Math.abs(g.playerZ+30)<1.4f&&g.ready)||(Math.abs(rx+2)<1.35f&&Math.abs(rz+30)<1.4f&&g.peerReady);
+                boolean b=(Math.abs(g.playerX-2)<1.35f&&Math.abs(g.playerZ+30)<1.4f&&g.ready)||(Math.abs(rx-2)<1.35f&&Math.abs(rz+30)<1.4f&&g.peerReady);
+                if(a&&b){g.stage=3;g.notice="Отлично! Все головоломки решены."; }
+            }
+        }
+        boolean nearConsole(float x,float z,int stage){
+            if(stage==1)return Math.abs(x-2)<1.65f&&Math.abs(z+18)<1.7f;
+            if(stage==2)return Math.abs(Math.abs(x)-2)<1.65f&&Math.abs(z+30)<1.7f;
+            if(stage>=3)return Math.abs(x)<1.5f&&z<-37;
+            return false;
+        }
+        void station(int n,float z){
+            float left=n==0?-2:-2,right=2;
+            box(-2,.09f,z,1.7f,.18f,1.7f,n==0?new float[]{1,.18f,.3f,1}:new float[]{.12f,.38f,.9f,1});
+            box(2,.09f,z,1.7f,.18f,1.7f,new float[]{.12f,.38f,.9f,1});
+            box(-2,.20f,z,1.15f,.06f,1.15f,new float[]{.16f,.9f,.72f,1});
+            box(2,.20f,z,1.15f,.06f,1.15f,new float[]{.16f,.9f,.72f,1});
+            if(n==1){box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.12f,.8f,.7f,1});box(2,1.45f,z-1.35f,.85f,.12f,.42f,new float[]{.3f,1,.84f,1});}
+            if(n==2){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.25f,.38f,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.15f,.48f,1,1});}
+            box(0,.04f,z-2.7f,1.0f,.08f,.35f,new float[]{.15f,.8f,.68f,1});
+        }
+        void gate(int n,float z){
+            box(-3,1.25f,z,.18f,2.5f,.28f,new float[]{.2f,.85f,.77f,1});box(3,1.25f,z,.18f,2.5f,.28f,new float[]{.2f,.85f,.77f,1});
+            box(0,2.5f,z,6.1f,.18f,.28f,new float[]{.2f,.85f,.77f,1});
+            box(0,1.25f,z,.08f,2.3f,.12f,new float[]{.12f,.25f,.34f,1});
+        }
+        void remoteHero(float x,float z,float[] col){
+            box(x,1.0f,z,.56f,.82f,.42f,col);box(x,1.62f,z,.46f,.43f,.43f,new float[]{.83f,.91f,1,1});
+            box(x-.36f,.98f,z,.14f,.65f,.17f,col);box(x+.36f,.98f,z,.14f,.65f,.17f,col);
+            box(x-.16f,.28f,z,.18f,.52f,.21f,new float[]{.2f,.28f,.4f,1});box(x+.16f,.28f,z,.18f,.52f,.21f,new float[]{.2f,.28f,.4f,1});
+            box(x,1.03f,z-.22f,.22f,.15f,.035f,new float[]{.6f,1,.93f,1});
         }
         void box(float x,float y,float z,float sx,float sy,float sz,float[] color){
             Matrix.setIdentityM(model,0);Matrix.translateM(model,0,x,y,z);Matrix.scaleM(model,0,sx,sy,sz);
-            Matrix.multiplyMM(mv,0,view,0,model,0);Matrix.multiplyMM(mvp,0,projection,0,mv,0);
+            Matrix.multiplyMM(mv,0,view,0,model,0);Matrix.multiplyMM(mvp,0,proj,0,mv,0);
             GLES20.glUniformMatrix4fv(mvpLoc,1,false,mvp,0);GLES20.glUniform4fv(colorLoc,1,color,0);GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,36);
         }
     }
