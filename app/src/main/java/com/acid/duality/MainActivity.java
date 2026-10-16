@@ -428,7 +428,7 @@ public class MainActivity extends Activity {
                     byte[] buf=new byte[512];DatagramPacket packet=new DatagramPacket(buf,buf.length);
                     try{
                         ds.receive(packet);String msg=new String(packet.getData(),packet.getOffset(),packet.getLength(),StandardCharsets.UTF_8);
-                        if(msg.startsWith("DUALITY_LOBBY|")){String[] parts=msg.split("\\|");if(parts.length>=3){String address=packet.getAddress().getHostAddress();found.put(address,(parts[1].isEmpty()?"Устройство DUALITY":parts[1])+" • "+address);}}
+                        if(msg.startsWith("DUALITY_LOBBY|")){String[] parts=msg.split("\\|");if(parts.length>=3){String address=packet.getAddress().getHostAddress();String ownAddress=wifiIpAddress();if(address.equals(ownAddress)||address.equals("127.0.0.1"))continue;found.put(address,(parts[1].isEmpty()?"Устройство DUALITY":parts[1])+" • "+address);}}
                     }catch(SocketTimeoutException timeout){break;}
                 }
             }catch(Exception ex){final String err=shortError(ex);handler.post(()->toast("Поиск лобби: "+err));}
