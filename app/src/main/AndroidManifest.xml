@@ -11,6 +11,7 @@
     <application
         android:allowBackup="false"
         android:label="DUALITY"
+        android:icon="@drawable/ic_duality"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="true"
         android:supportsRtl="true">
