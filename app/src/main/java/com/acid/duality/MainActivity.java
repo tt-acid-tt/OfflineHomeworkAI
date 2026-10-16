@@ -6,6 +6,7 @@ import android.graphics.*;
 import android.view.*;
 import android.view.inputmethod.InputMethodManager;
 import android.content.*;
+import android.net.wifi.WifiManager;
 import android.bluetooth.*;
 import android.widget.*;
 import java.io.*;
@@ -40,6 +41,7 @@ public class MainActivity extends Activity {
         volatile boolean discoveryRunning=false; Thread beaconThread;
         boolean modalOpen=false; String modalTitle="",modalMessage=""; ArrayList<String> modalOptions=new ArrayList<>(); ArrayList<Runnable> modalActions=new ArrayList<>();
         BluetoothAdapter bt; BluetoothSocket btSocket; BluetoothServerSocket btServer;
+        WifiManager.MulticastLock wifiMulticastLock;
         final UUID BT_UUID=UUID.fromString("b6a8a2d1-63ab-4ec3-b4c9-4c6c9b210101");
         Thread netThread;
         float anim=0, px=0.18f, py=0.65f, ox=0.78f, oy=0.65f;
@@ -362,8 +364,9 @@ public class MainActivity extends Activity {
         }
         void createLobby(){
             host=true;connected=false;started=false;screen=2;status="ОЖИДАНИЕ ИГРОКА";invalidate();
+            if(mode==0) acquireWifiMulticastLock();
             if(mode==0){
-                netThread=new Thread(()->{try{server=new ServerSocket();server.setReuseAddress(true);server.bind(new InetSocketAddress(47822));startLobbyBeacon();handler.post(()->{status="ЛОББИ СОЗДАНО • ОЖИДАНИЕ ИГРОКА";invalidate();});Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби";stopLobbyBeacon();handler.post(()->showPopup("НЕ УДАЛОСЬ СОЗДАТЬ ЛОББИ","Проверьте Wi-Fi. Если игра уже открыта на этом телефоне, выйдите в меню и попробуйте снова.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();}});netThread.start();
+                netThread=new Thread(()->{try{server=new ServerSocket();server.setReuseAddress(true);server.bind(new InetSocketAddress(47822));startLobbyBeacon();handler.post(()->{status="ЛОББИ СОЗДАНО • ОЖИДАНИЕ ИГРОКА";invalidate();});Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби: "+shortError(ex);stopLobbyBeacon();releaseWifiMulticastLock();handler.post(()->showPopup("НЕ УДАЛОСЬ СОЗДАТЬ ЛОББИ","Ошибка: "+shortError(ex)+". Проверьте Wi-Fi и попробуйте создать комнату заново.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();}});netThread.start();
             }else{
                 if(bt==null){showPopup("BLUETOOTH НЕДОСТУПЕН","На этом устройстве нет Bluetooth.",new String[]{"ПОНЯТНО"},()->{});return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},401);return;}
@@ -398,15 +401,26 @@ public class MainActivity extends Activity {
                     ds=new DatagramSocket();ds.setBroadcast(true);
                     byte[] data=("DUALITY_LOBBY|"+android.os.Build.MODEL+"|47822").getBytes(StandardCharsets.UTF_8);
                     while(discoveryRunning && server!=null && !server.isClosed()){
-                        try{ds.send(new DatagramPacket(data,data.length,InetAddress.getByName("255.255.255.255"),47823));}catch(Exception ignored){}
+                        sendLobbyBeacon(ds,data);
                         try{Thread.sleep(900);}catch(InterruptedException ignored){break;}
                     }
                 }catch(Exception ignored){}finally{if(ds!=null)ds.close();}
             });beaconThread.start();
         }
+        void sendLobbyBeacon(DatagramSocket ds,byte[] data){
+            HashSet<String> targets=new HashSet<>();targets.add("255.255.255.255");
+            try{Enumeration<NetworkInterface> interfaces=NetworkInterface.getNetworkInterfaces();while(interfaces!=null&&interfaces.hasMoreElements()){
+                NetworkInterface ni=interfaces.nextElement();try{if(!ni.isUp()||ni.isLoopback())continue;}catch(Exception ignored){continue;}
+                for(InterfaceAddress ia:ni.getInterfaceAddresses()){InetAddress broadcast=ia.getBroadcast();if(broadcast instanceof Inet4Address)targets.add(broadcast.getHostAddress());}
+            }}catch(Exception ignored){}
+            for(String target:targets)try{ds.send(new DatagramPacket(data,data.length,InetAddress.getByName(target),47823));}catch(Exception ignored){}
+        }
         void stopLobbyBeacon(){discoveryRunning=false;if(beaconThread!=null){beaconThread.interrupt();beaconThread=null;}}
+        void acquireWifiMulticastLock(){try{WifiManager wm=(WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);if(wm!=null){if(wifiMulticastLock==null)wifiMulticastLock=wm.createMulticastLock("duality-lobby-discovery");if(!wifiMulticastLock.isHeld())wifiMulticastLock.acquire();}}catch(Exception ignored){}}
+        void releaseWifiMulticastLock(){try{if(wifiMulticastLock!=null&&wifiMulticastLock.isHeld())wifiMulticastLock.release();}catch(Exception ignored){}}
+        String shortError(Exception ex){String m=ex.getMessage();return ex.getClass().getSimpleName()+(m==null||m.trim().isEmpty()?"":" — "+m);}
         void discoverLobbies(){
-            LinkedHashMap<String,String> found=new LinkedHashMap<>();DatagramSocket ds=null;
+            LinkedHashMap<String,String> found=new LinkedHashMap<>();DatagramSocket ds=null;acquireWifiMulticastLock();
             try{
                 ds=new DatagramSocket(null);ds.setReuseAddress(true);ds.bind(new InetSocketAddress(47823));ds.setSoTimeout(2500);
                 long end=System.currentTimeMillis()+2500;
@@ -417,8 +431,8 @@ public class MainActivity extends Activity {
                         if(msg.startsWith("DUALITY_LOBBY|")){String[] parts=msg.split("\\|");if(parts.length>=3){String address=packet.getAddress().getHostAddress();found.put(address,(parts[1].isEmpty()?"Устройство DUALITY":parts[1])+" • "+address);}}
                     }catch(SocketTimeoutException timeout){break;}
                 }
-            }catch(Exception ex){handler.post(()->toast("Не удалось найти лобби. Проверьте общую Wi-Fi сеть."));}
-            finally{if(ds!=null)ds.close();}
+            }catch(Exception ex){final String err=shortError(ex);handler.post(()->toast("Поиск лобби: "+err));}
+            finally{if(ds!=null)ds.close();releaseWifiMulticastLock();}
             ArrayList<String> addresses=new ArrayList<>(found.keySet());ArrayList<String> labels=new ArrayList<>(found.values());
             handler.post(()->{
                 if(isFinishing())return;
@@ -438,8 +452,9 @@ public class MainActivity extends Activity {
                 Socket s=new Socket();s.connect(new InetSocketAddress(address,47822),7000);socket=s;setupStreams(s);
                 connected=true;status="СОЕДИНЕНО";send("JOIN");handler.post(()->invalidate());runReader();
             }catch(Exception ex){
-                status="Не удалось подключиться. Обновите список и проверьте Wi-Fi.";
-                handler.post(()->showPopup("НЕ УДАЛОСЬ ПОДКЛЮЧИТЬСЯ","Лобби могло закрыться или телефоны не в одной сети. Создайте комнату заново и обновите список.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();
+                try{if(socket!=null)socket.close();}catch(Exception ignored){}socket=null;connected=false;
+                final String err=shortError(ex);status="Не удалось подключиться: "+err;
+                handler.post(()->showPopup("НЕ УДАЛОСЬ ПОДКЛЮЧИТЬСЯ","Причина: "+err+". Проверьте, что оба телефона в одной Wi-Fi сети и на телефоне-хосте открыт экран лобби.",new String[]{"ПОНЯТНО","ВЫЙТИ В МЕНЮ"},()->{},()->{closeNetwork();screen=1;invalidate();}));postInvalidate();
             }});netThread.start();
         }
         // Adapts RFCOMM streams to the same simple message protocol used by Wi-Fi.
@@ -475,7 +490,7 @@ public class MainActivity extends Activity {
             invalidate();
         }
         String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}
-        void closeNetwork(){try{if(socket!=null)socket.close();}catch(Exception ignored){}stopLobbyBeacon();try{if(server!=null)server.close();}catch(Exception ignored){}try{if(btSocket!=null)btSocket.close();}catch(Exception ignored){}try{if(btServer!=null)btServer.close();}catch(Exception ignored){}socket=null;server=null;writer=null;reader=null;connected=false;host=false;}
+        void closeNetwork(){try{if(socket!=null)socket.close();}catch(Exception ignored){}stopLobbyBeacon();releaseWifiMulticastLock();try{if(server!=null)server.close();}catch(Exception ignored){}try{if(btSocket!=null)btSocket.close();}catch(Exception ignored){}try{if(btServer!=null)btServer.close();}catch(Exception ignored){}socket=null;server=null;writer=null;reader=null;connected=false;host=false;}
         void toast(String s){showPopup("DUALITY",s,new String[]{"ПОНЯТНО"},()->{});}
 
         void showPopup(String title,String message,String[] options,Runnable... actions){
