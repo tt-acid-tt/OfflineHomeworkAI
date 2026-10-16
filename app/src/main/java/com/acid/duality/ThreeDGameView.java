@@ -179,7 +179,7 @@ public class ThreeDGameView extends GLSurfaceView {
                     fill(c,w-340,h-144,w-274,h-58,15,Color.argb(225,25,44,66));center(c,"◀",w-307,h-91,25,Color.WHITE,true);
                     fill(c,w-270,h-144,w-204,h-58,15,Color.argb(225,25,44,66));center(c,"▶",w-237,h-91,25,Color.WHITE,true);
                     fill(c,w-198,h-144,w-22,h-58,15,g.confirmed?Color.rgb(255,190,75):Color.rgb(70,255,214));
-                    center(c,confirmed?"ОЖИДАНИЕ...":"ЗАФИКСИРОВАТЬ",w-110,h-112,Math.min(14,w*.018f),Color.rgb(4,20,31),true);
+                    center(c,g.confirmed?"ОЖИДАНИЕ...":"ЗАФИКСИРОВАТЬ",w-110,h-112,Math.min(14,w*.018f),Color.rgb(4,20,31),true);
                     center(c,"КОД: "+new String[]{"1  △","2  ○","3  ◇","4  ☾"}[g.choiceIndex],w-110,h-82,18,Color.rgb(4,20,31),true);
                 }
                 if(g.stage>=4){
@@ -363,6 +363,13 @@ public class ThreeDGameView extends GLSurfaceView {
             if(n==2){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.25f,.38f,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.15f,.48f,1,1});}
             if(n==3){box(-2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.65f,.35f,1,1});box(2,.8f,z-1.35f,.7f,1.4f,.35f,new float[]{.9f,.35f,.2f,1});}
             box(0,.04f,z-2.7f,1.0f,.08f,.35f,new float[]{.15f,.8f,.68f,1});
+        }
+        void gate(int n,float z){
+            float glow=n%2==0?.2f:.9f;
+            box(-3,1.25f,z,.18f,2.5f,.28f,new float[]{.2f,.85f,.77f,1});
+            box(3,1.25f,z,.18f,2.5f,.28f,new float[]{.2f,.85f,.77f,1});
+            box(0,2.5f,z,6.1f,.18f,.28f,new float[]{.2f,.85f,.77f,1});
+            box(0,1.25f,z,.08f,2.3f,.12f,new float[]{.12f,.25f,.34f,1});
         }
         void remoteHero(float x,float z,float[] col){
             box(x,1.0f,z,.56f,.82f,.42f,col);box(x,1.62f,z,.46f,.43f,.43f,new float[]{.83f,.91f,1,1});
