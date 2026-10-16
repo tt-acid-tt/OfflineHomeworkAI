@@ -133,9 +133,9 @@ public class MainActivity extends Activity {
             // Floating translucent player cards.
             float top=h*.315f,bottom=h*.705f;
             rect(w*.095f,top,w*.455f,bottom,25,Color.argb(205,17,29,51));
-            stroke(w*.095f,top,w*.455f,bottom,25,Color.argb(205,RED),2);
+            stroke(w*.095f,top,w*.455f,bottom,25,Color.argb(205,Color.red(RED),Color.green(RED),Color.blue(RED)),2);
             rect(w*.545f,top,w*.905f,bottom,25,Color.argb(205,17,29,51));
-            stroke(w*.545f,top,w*.905f,bottom,25,connected?Color.argb(220,BLUE):Color.rgb(63,81,112),2);
+            stroke(w*.545f,top,w*.905f,bottom,25,connected?Color.argb(220,Color.red(BLUE),Color.green(BLUE),Color.blue(BLUE)):Color.rgb(63,81,112),2);
             drawPlayerCard(w*.11f,h*.34f,w*.44f,h*.68f,host?"ВЫ • ХОСТ":"ИГРОК 1",red?RED:BLUE,true);
             drawPlayerCard(w*.56f,h*.34f,w*.89f,h*.68f,connected?"ИГРОК 2":"СВОБОДНОЕ МЕСТО",connected?(red?BLUE:RED):Color.rgb(105,126,158),connected);
             if(host){
