@@ -26,6 +26,6 @@ public class MainActivity extends Activity {
     @Override protected void onPause() { super.onPause(); if(game!=null) game.onPause(); }
     @Override protected void onResume() { super.onResume(); if(game!=null) game.onResume(); }
     @Override public void onBackPressed() {
-        if(game!=null) { game.resetToMenu(); } else super.onBackPressed();
+        if(game!=null) { game.backToMenu(); } else super.onBackPressed();
     }
 }
