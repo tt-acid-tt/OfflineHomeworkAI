@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
         String status="СОЗДАЙТЕ ЛОББИ ИЛИ ПОДКЛЮЧИТЕСЬ", ip="", roomName="ЗАЛ СИГНАЛОВ";
         Socket socket; ServerSocket server; BufferedReader reader; PrintWriter writer;
         volatile boolean discoveryRunning=false; Thread beaconThread;
+        boolean modalOpen=false; String modalTitle="",modalMessage=""; ArrayList<String> modalOptions=new ArrayList<>(); ArrayList<Runnable> modalActions=new ArrayList<>();
         BluetoothAdapter bt; BluetoothSocket btSocket; BluetoothServerSocket btServer;
         final UUID BT_UUID=UUID.fromString("b6a8a2d1-63ab-4ec3-b4c9-4c6c9b210101");
         Thread netThread;
@@ -81,6 +82,7 @@ public class MainActivity extends Activity {
             else if(screen==2) drawLobby(w,h);
             else drawGame(w,h);
             if(showSettings){rect(w*.27f,h*.18f,w*.73f,h*.82f,24,PANEL);stroke(w*.27f,h*.18f,w*.73f,h*.82f,24,BLUE,2);center("НАСТРОЙКИ",w/2,h*.30f,27,WHITE,true);center("DUALITY • два игрока — один разум",w/2,h*.41f,17,MUTED,false);button("settingsBack","НАЗАД",w*.39f,h*.64f,w*.22f,h*.1f,MINT,true);}
+            if(modalOpen) drawCustomModal(w,h);
             postInvalidateDelayed(33);
         }
         void drawMenu(float w,float h){
@@ -327,6 +329,7 @@ public class MainActivity extends Activity {
         @Override public boolean onTouchEvent(android.view.MotionEvent e){
             if(e.getAction()!=MotionEvent.ACTION_UP)return true;
             float x=e.getX(),y=e.getY();
+            if(modalOpen){handleModalTouch(x,y);return true;}
             if(showSettings){showSettings=false;invalidate();return true;}
             for(Map.Entry<String,RectF> entry:buttons.entrySet())if(entry.getValue().contains(x,y)){click(entry.getKey());return true;}
             if(screen==3){if(x<getWidth()*.5f){if(y>getHeight()*.60f){px=Math.max(.03f,Math.min(.95f,px+(x<getWidth()*.25f?-.06f:.06f)));moves++;sendState();}else{py=Math.max(.05f,py-.07f);moves++;sendState();}}else if(y>getHeight()*.58f){ox=Math.max(.03f,Math.min(.95f,ox+(x<getWidth()*.75f?-.05f:.05f)));moves++;sendState();}invalidate();}
@@ -353,10 +356,9 @@ public class MainActivity extends Activity {
             invalidate();
         }
         void showLobbyChoice(){
-            String[] options={"Создать лобби","Найти доступные лобби"};
-            new AlertDialog.Builder(MainActivity.this).setTitle(mode==0?"ИГРА ПО WI-FI":"ИГРА ПО BLUETOOTH")
-                .setMessage(mode==0?"Оба телефона должны быть подключены к одной Wi-Fi сети. Хост создаёт комнату, второй игрок выбирает её из списка.":"Bluetooth — для устройств рядом. «Сопряжение» означает, что телефоны один раз подтвердили связь в настройках Bluetooth. После этого выберите телефон из списка.")
-                .setItems(options,(d,which)->{if(which==0)createLobby();else joinLobby();}).setNegativeButton("ОТМЕНА",null).show();
+            showPopup(mode==0?"ИГРА ПО WI-FI":"ИГРА ПО BLUETOOTH",
+                mode==0?"Создайте комнату на одном телефоне. На втором нажмите «Найти лобби». Оба телефона должны быть в одной Wi-Fi сети.":"Создайте комнату на одном телефоне. На втором выберите «Найти лобби». Для Bluetooth телефоны должны быть сопряжены в настройках Android.",
+                new String[]{"СОЗДАТЬ ЛОББИ","НАЙТИ ЛОББИ","ОТМЕНА"},()->createLobby(),()->joinLobby(),()->{});
         }
         void createLobby(){
             host=true;connected=false;started=false;screen=2;status="ОЖИДАНИЕ ИГРОКА";invalidate();
@@ -411,14 +413,12 @@ public class MainActivity extends Activity {
             handler.post(()->{
                 if(isFinishing())return;
                 if(addresses.isEmpty()){
-                    new AlertDialog.Builder(MainActivity.this).setTitle("Лобби не найдены")
-                        .setMessage("Подключите оба телефона к одной Wi-Fi сети. На первом телефоне нажмите «Создать лобби», затем повторите поиск.")
-                        .setPositiveButton("ИСКАТЬ СНОВА",(d,v)->joinLobby()).setNegativeButton("НАЗАД",(d,v)->{screen=1;invalidate();}).show();
+                    showPopup("ЛОББИ НЕ НАЙДЕНЫ","Подключите оба телефона к одной Wi-Fi сети. На первом телефоне нажмите «Создать лобби» и дождитесь экрана комнаты.",new String[]{"ИСКАТЬ СНОВА","НАЗАД"},()->joinLobby(),()->{screen=1;invalidate();});
                 }else{
-                    new AlertDialog.Builder(MainActivity.this).setTitle("ДОСТУПНЫЕ ЛОББИ")
-                        .setMessage("Выберите комнату для подключения.")
-                        .setItems(labels.toArray(new String[0]),(d,which)->connectToLobby(addresses.get(which)))
-                        .setNeutralButton("ОБНОВИТЬ",(d,v)->joinLobby()).setNegativeButton("НАЗАД",(d,v)->{screen=1;invalidate();}).show();
+                    String[] opts=new String[labels.size()+2];Runnable[] acts=new Runnable[opts.length];
+                    for(int i=0;i<labels.size();i++){opts[i]=labels.get(i);final int ix=i;acts[i]=()->connectToLobby(addresses.get(ix));}
+                    opts[labels.size()]="ОБНОВИТЬ СПИСОК";acts[labels.size()]=()->joinLobby();opts[labels.size()+1]="НАЗАД";acts[labels.size()+1]=()->{screen=1;invalidate();};
+                    showPopup("ДОСТУПНЫЕ ЛОББИ","Выберите комнату для подключения.",opts,acts);
                 }
             });
         }
@@ -429,7 +429,7 @@ public class MainActivity extends Activity {
                 connected=true;status="СОЕДИНЕНО";send("JOIN");handler.post(()->invalidate());runReader();
             }catch(Exception ex){
                 status="Не удалось подключиться. Обновите список и проверьте Wi-Fi.";
-                handler.post(()->new AlertDialog.Builder(MainActivity.this).setTitle("Не удалось подключиться").setMessage("Лобби могло закрыться или телефоны не в одной сети.").setPositiveButton("ПОНЯТНО",null).show());postInvalidate();
+                handler.post(()->showPopup("НЕ УДАЛОСЬ ПОДКЛЮЧИТЬСЯ","Лобби могло закрыться или телефоны не в одной сети. Создайте комнату заново и обновите список.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();
             }});netThread.start();
         }
         // Adapts RFCOMM streams to the same simple message protocol used by Wi-Fi.
@@ -466,8 +466,42 @@ public class MainActivity extends Activity {
         }
         String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}
         void closeNetwork(){try{if(socket!=null)socket.close();}catch(Exception ignored){}stopLobbyBeacon();try{if(server!=null)server.close();}catch(Exception ignored){}try{if(btSocket!=null)btSocket.close();}catch(Exception ignored){}try{if(btServer!=null)btServer.close();}catch(Exception ignored){}socket=null;server=null;writer=null;reader=null;connected=false;host=false;}
-        void toast(String s){Toast.makeText(MainActivity.this,s,Toast.LENGTH_LONG).show();}
-        void back(){if(showSettings){showSettings=false;}else if(screen==3){screen=2;}else if(screen==2){closeNetwork();screen=1;}else if(screen==1)screen=0;else superBack();invalidate();}
+        void toast(String s){showPopup("DUALITY",s,new String[]{"ПОНЯТНО"},()->{});}
+
+        void showPopup(String title,String message,String[] options,Runnable... actions){
+            modalTitle=title;modalMessage=message;modalOptions=new ArrayList<>(Arrays.asList(options));modalActions=new ArrayList<>();
+            for(int i=0;i<options.length;i++)modalActions.add(i<actions.length&&actions[i]!=null?actions[i]:()->{});
+            modalOpen=true;invalidate();
+        }
+        void drawCustomModal(float w,float h){
+            p.setColor(Color.argb(185,2,5,13));c.drawRect(0,0,w,h,p);
+            float mw=Math.min(w*.72f,650),mh=Math.min(h*.82f,570),l=(w-mw)/2,t=(h-mh)/2;
+            p.setShadowLayer(28,0,7,Color.argb(120,30,120,220));rect(l,t,l+mw,t+mh,28,Color.rgb(14,23,41));p.clearShadowLayer();
+            stroke(l,t,l+mw,t+mh,28,Color.rgb(63,117,171),2);rect(l+24,t+23,l+mw-24,t+28,3,MINT);
+            center(modalTitle,w/2,t+62,Math.min(25,w*.032f),WHITE,true);
+            float yy=t+98,maxw=mw-54,fs=Math.min(16,w*.022f);String line="";int lines=0;
+            p.setTextSize(fs);p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+            for(String word:modalMessage.split(" ")){String test=line.isEmpty()?word:line+" "+word;if(p.measureText(test)>maxw){center(line,w/2,yy,fs,MUTED,false);yy+=23;line=word;if(++lines>=5)break;}else line=test;}
+            if(!line.isEmpty()&&lines<6){center(line,w/2,yy,fs,MUTED,false);yy+=28;}
+            int n=modalOptions.size();float bh=Math.min(47,h*.075f),gap=8,listBottom=t+mh-18,listTop=listBottom-n*bh-(n-1)*gap;
+            if(listTop<yy+5){bh=Math.max(28,(listBottom-yy-5-(n-1)*gap)/Math.max(1,n));listTop=listBottom-n*bh-(n-1)*gap;}
+            for(int i=0;i<n;i++){float by=listTop+i*(bh+gap);boolean primary=i==0&&!modalOptions.get(i).equals("ОТМЕНА")&&!modalOptions.get(i).equals("НАЗАД")&&!modalOptions.get(i).equals("ПОНЯТНО");
+                if(primary){p.setShader(new LinearGradient(l+35,by,l+mw-35,by+bh,Color.rgb(75,230,199),Color.rgb(49,157,220),Shader.TileMode.CLAMP));c.drawRoundRect(l+35,by,l+mw-35,by+bh,13,13,p);p.setShader(null);}
+                else{rect(l+35,by,l+mw-35,by+bh,13,Color.rgb(22,35,57));stroke(l+35,by,l+mw-35,by+bh,13,Color.rgb(57,85,122),1);}
+                center(modalOptions.get(i),w/2,by+bh*.63f,Math.min(16,w*.022f),primary?Color.rgb(9,18,31):WHITE,true);
+            }
+        }
+        void handleModalTouch(float x,float y){
+            float w=getWidth(),h=getHeight(),mw=Math.min(w*.72f,650),mh=Math.min(h*.82f,570),t=(h-mh)/2,listBottom=t+mh-18;
+            float yy=t+98,maxw=mw-54,fs=Math.min(16,w*.022f);p.setTextSize(fs);p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));String line="";int lines=0;
+            for(String word:modalMessage.split(" ")){String test=line.isEmpty()?word:line+" "+word;if(p.measureText(test)>maxw){yy+=23;line=word;if(++lines>=5)break;}else line=test;}
+            if(!line.isEmpty()&&lines<6)yy+=28;
+            int n=modalOptions.size();float bh=Math.min(47,h*.075f),gap=8,listTop=listBottom-n*bh-(n-1)*gap;
+            if(listTop<yy+5){bh=Math.max(28,(listBottom-yy-5-(n-1)*gap)/Math.max(1,n));listTop=listBottom-n*bh-(n-1)*gap;}
+            for(int i=0;i<n;i++){float by=listTop+i*(bh+gap);if(y>=by&&y<=by+bh){Runnable a=modalActions.get(i);modalOpen=false;invalidate();if(a!=null)a.run();return;}}
+            if(x< w*.14f||x>w*.86f||y<t||y>t+mh){modalOpen=false;invalidate();}
+        }
+        void back(){if(modalOpen){modalOpen=false;}else if(showSettings){showSettings=false;}else if(screen==3){screen=2;}else if(screen==2){closeNetwork();screen=1;}else if(screen==1)screen=0;else superBack();invalidate();}
         void superBack(){MainActivity.super.onBackPressed();}
     }
 }
