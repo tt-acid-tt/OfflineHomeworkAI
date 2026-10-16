@@ -363,7 +363,7 @@ public class MainActivity extends Activity {
         void createLobby(){
             host=true;connected=false;started=false;screen=2;status="ОЖИДАНИЕ ИГРОКА";invalidate();
             if(mode==0){
-                netThread=new Thread(()->{try{server=new ServerSocket(47822);startLobbyBeacon();Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби. Проверьте Wi-Fi и повторите попытку.";stopLobbyBeacon();postInvalidate();}});netThread.start();
+                netThread=new Thread(()->{try{server=new ServerSocket();server.setReuseAddress(true);server.bind(new InetSocketAddress(47822));startLobbyBeacon();handler.post(()->{status="ЛОББИ СОЗДАНО • ОЖИДАНИЕ ИГРОКА";invalidate();});Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби";stopLobbyBeacon();handler.post(()->showPopup("НЕ УДАЛОСЬ СОЗДАТЬ ЛОББИ","Проверьте Wi-Fi. Если игра уже открыта на этом телефоне, выйдите в меню и попробуйте снова.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();}});netThread.start();
             }else{
                 if(bt==null){showPopup("BLUETOOTH НЕДОСТУПЕН","На этом устройстве нет Bluetooth.",new String[]{"ПОНЯТНО"},()->{});return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},401);return;}
