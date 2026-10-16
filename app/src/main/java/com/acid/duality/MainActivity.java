@@ -366,7 +366,7 @@ public class MainActivity extends Activity {
             host=true;connected=false;started=false;screen=2;status="ОЖИДАНИЕ ИГРОКА";invalidate();
             if(mode==0) acquireWifiMulticastLock();
             if(mode==0){
-                netThread=new Thread(()->{try{server=new ServerSocket();server.setReuseAddress(true);server.bind(new InetSocketAddress(47822));startLobbyBeacon();handler.post(()->{status="ЛОББИ СОЗДАНО • ОЖИДАНИЕ ИГРОКА";invalidate();});Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби: "+shortError(ex);stopLobbyBeacon();releaseWifiMulticastLock();handler.post(()->showPopup("НЕ УДАЛОСЬ СОЗДАТЬ ЛОББИ","Ошибка: "+shortError(ex)+". Проверьте Wi-Fi и попробуйте создать комнату заново.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();}});netThread.start();
+                netThread=new Thread(()->{try{server=new ServerSocket();server.setReuseAddress(true);server.bind(new InetSocketAddress(47822));startLobbyBeacon();handler.post(()->{status="ЛОББИ СОЗДАНО • IP "+wifiIpAddress();invalidate();});Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби: "+shortError(ex);stopLobbyBeacon();releaseWifiMulticastLock();handler.post(()->showPopup("НЕ УДАЛОСЬ СОЗДАТЬ ЛОББИ","Ошибка: "+shortError(ex)+". Проверьте Wi-Fi и попробуйте создать комнату заново.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();}});netThread.start();
             }else{
                 if(bt==null){showPopup("BLUETOOTH НЕДОСТУПЕН","На этом устройстве нет Bluetooth.",new String[]{"ПОНЯТНО"},()->{});return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},401);return;}
@@ -437,11 +437,11 @@ public class MainActivity extends Activity {
             handler.post(()->{
                 if(isFinishing())return;
                 if(addresses.isEmpty()){
-                    showPopup("ЛОББИ НЕ НАЙДЕНЫ","Подключите оба телефона к одной Wi-Fi сети. На первом телефоне нажмите «Создать лобби» и дождитесь экрана комнаты.",new String[]{"ИСКАТЬ СНОВА","НАЗАД"},()->joinLobby(),()->{screen=1;invalidate();});
+                    showPopup("ЛОББИ НЕ НАЙДЕНЫ","Автопоиск не увидел другой телефон. Проверьте, что оба подключены к одной Wi-Fi сети, или введите IP телефона-хоста вручную.",new String[]{"ВВЕСТИ IP","ИСКАТЬ СНОВА","НАЗАД"},()->showDirectIpDialog(),()->joinLobby(),()->{screen=1;invalidate();});
                 }else{
-                    String[] opts=new String[labels.size()+2];Runnable[] acts=new Runnable[opts.length];
+                    String[] opts=new String[labels.size()+3];Runnable[] acts=new Runnable[opts.length];
                     for(int i=0;i<labels.size();i++){opts[i]=labels.get(i);final int ix=i;acts[i]=()->connectToLobby(addresses.get(ix));}
-                    opts[labels.size()]="ОБНОВИТЬ СПИСОК";acts[labels.size()]=()->joinLobby();opts[labels.size()+1]="НАЗАД";acts[labels.size()+1]=()->{screen=1;invalidate();};
+                    opts[labels.size()]="ВВЕСТИ IP ВРУЧНУЮ";acts[labels.size()]=()->showDirectIpDialog();opts[labels.size()+1]="ОБНОВИТЬ СПИСОК";acts[labels.size()+1]=()->joinLobby();opts[labels.size()+2]="НАЗАД";acts[labels.size()+2]=()->{screen=1;invalidate();};
                     showPopup("ДОСТУПНЫЕ ЛОББИ","Выберите комнату для подключения.",opts,acts);
                 }
             });
@@ -489,7 +489,7 @@ public class MainActivity extends Activity {
             if(doorOpen){room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;send("ROOM,"+room);if(room==rooms.length-1)toast("Финальная комната — найдите общий выход!");}
             invalidate();
         }
-        String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}
+        String wifiIpAddress(){try{WifiManager wm=(WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);if(wm!=null){int v=wm.getConnectionInfo().getIpAddress();if(v!=0)return String.format(Locale.US,"%d.%d.%d.%d",v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255);}}catch(Exception ignored){}return localIp();}\n        String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}\n        void showDirectIpDialog(){EditText field=new EditText(MainActivity.this);field.setSingleLine(true);field.setInputType(android.text.InputType.TYPE_CLASS_PHONE);field.setHint("192.168.1.25");new AlertDialog.Builder(MainActivity.this).setTitle("IP-АДРЕС ХОСТА").setMessage("На телефоне, где создано лобби, посмотри IP на экране комнаты и введи его сюда. Оба телефона должны быть в одной Wi-Fi сети.").setView(field).setNegativeButton("ОТМЕНА",(d,w)->{}).setPositiveButton("ПОДКЛЮЧИТЬСЯ",(d,w)->{String address=field.getText().toString().trim();if(address.isEmpty()){toast("Введи IP-адрес телефона-хоста");return;}connectToLobby(address);}).show();}
         void closeNetwork(){try{if(socket!=null)socket.close();}catch(Exception ignored){}stopLobbyBeacon();releaseWifiMulticastLock();try{if(server!=null)server.close();}catch(Exception ignored){}try{if(btSocket!=null)btSocket.close();}catch(Exception ignored){}try{if(btServer!=null)btServer.close();}catch(Exception ignored){}socket=null;server=null;writer=null;reader=null;connected=false;host=false;}
         void toast(String s){showPopup("DUALITY",s,new String[]{"ПОНЯТНО"},()->{});}
 
