@@ -34,6 +34,8 @@ public class ThreeDGameView extends GLSurfaceView {
     volatile int blueprintType=0;
     volatile float dayClock=0f;
     volatile float chopAnim=0f;
+    final boolean[] builtTypes=new boolean[6];
+    final float[] buildX=new float[6], buildZ=new float[6];
     volatile float campfireX=0,campfireZ=0, shelterX=0,shelterZ=0;
     volatile float sceneTime=0f;
     volatile boolean skipHold=false;
@@ -87,6 +89,7 @@ public class ThreeDGameView extends GLSurfaceView {
         if(wood<needWood[blueprintType] || scrap<needScrap[blueprintType]) { notice="Не хватает ресурсов для: "+new String[]{"костра","фундамента","стены","потолка","дверного проёма","укрытия"][blueprintType]; hud.invalidate(); return; }
         wood-=needWood[blueprintType]; scrap-=needScrap[blueprintType];
         float bx=playerX+(float)Math.sin(yaw)*3.0f,bz=playerZ-(float)Math.cos(yaw)*3.0f;
+        builtTypes[blueprintType]=true;buildX[blueprintType]=bx;buildZ[blueprintType]=bz;
         if(blueprintType==0){campfireBuilt=true;campfireX=bx;campfireZ=bz;}
         else {shelterBuilt=true;shelterX=bx;shelterZ=bz;}
         blueprintMode=false; blueprintBookOpen=false;
@@ -467,7 +470,21 @@ public class ThreeDGameView extends GLSurfaceView {
             if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.38f,.4f,.32f,1}:new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.solo) remoteHero(0,-8,new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.axeTaken){float ax=camX+(float)Math.sin(camYaw)*.38f,az=camZ-(float)Math.cos(camYaw)*.38f;float swing=g.chopAnim;box(ax,eyeY-.3f,az,.07f,.7f,.07f,new float[]{.36f,.22f,.12f,1});box(ax+.15f+swing*.22f,eyeY-.05f,az-.12f,.42f,.12f,.16f,new float[]{.55f,.58f,.55f,1});}
-            if(g.blueprintMode && !g.shelterBuilt){float bx=g.playerX+(float)Math.sin(g.yaw)*3.0f,bz=g.playerZ-(float)Math.cos(g.yaw)*3.0f;float[] guide=new float[]{.12f,.95f,.82f,.8f};box(bx,.07f,bz,2.8f,.05f,2.2f,guide);box(bx,1.0f,bz-1.0f,2.8f,.07f,.07f,guide);box(bx-1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx+1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx,2.0f,bz,3.0f,.07f,2.2f,guide);}
+            if(g.blueprintMode){float bx=g.playerX+(float)Math.sin(g.yaw)*3.0f,bz=g.playerZ-(float)Math.cos(g.yaw)*3.0f;float[] guide=new float[]{.12f,.95f,.82f,.8f};
+                if(g.blueprintType==0){box(bx,.16f,bz,1.0f,.06f,.18f,guide);box(bx,.16f,bz,.18f,.06f,1.0f,guide);box(bx,.45f,bz,.24f,.52f,.24f,guide);}
+                else if(g.blueprintType==1){box(bx,.08f,bz,3.0f,.08f,2.4f,guide);}
+                else if(g.blueprintType==2){box(bx,1.0f,bz,3.0f,2.0f,.16f,guide);}
+                else if(g.blueprintType==3){box(bx,2.0f,bz,3.0f,.12f,2.4f,guide);}
+                else if(g.blueprintType==4){box(bx-1.0f,1.0f,bz,1.0f,2.0f,.16f,guide);box(bx+1.0f,1.0f,bz,1.0f,2.0f,.16f,guide);box(bx,1.95f,bz,1.0f,.16f,.16f,guide);}
+                else {box(bx,.07f,bz,2.8f,.05f,2.2f,guide);box(bx,1.0f,bz-1.0f,2.8f,.07f,.07f,guide);box(bx-1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx+1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx,2.0f,bz,3.0f,.07f,2.2f,guide);}
+            }
+            for(int bt=1;bt<6;bt++)if(g.builtTypes[bt]){float bx=g.buildX[bt],bz=g.buildZ[bt];float[] wc=new float[]{.31f,.22f,.13f,1};
+                if(bt==1)box(bx,.08f,bz,3.0f,.14f,2.4f,wc);
+                else if(bt==2){box(bx,1.0f,bz,3.0f,2.0f,.18f,wc);for(int k=0;k<5;k++)box(bx-1.2f+k*.6f,1.0f,bz-.11f,.035f,1.8f,.02f,new float[]{.16f,.11f,.06f,1});}
+                else if(bt==3)box(bx,2.0f,bz,3.0f,.18f,2.4f,wc);
+                else if(bt==4){box(bx-1.0f,1.0f,bz,1.0f,2.0f,.18f,wc);box(bx+1.0f,1.0f,bz,1.0f,2.0f,.18f,wc);box(bx,1.95f,bz,1.0f,.18f,.18f,wc);}
+                else {box(bx,1.0f,bz-1.0f,2.8f,1.9f,.16f,wc);box(bx-1.35f,1.0f,bz,.16f,1.9f,2.0f,wc);box(bx+1.35f,1.0f,bz,.16f,1.9f,2.0f,wc);box(bx,2.0f,bz,3.0f,.16f,2.2f,new float[]{.23f,.18f,.12f,1});}
+            }
             if(g.shelterBuilt){float sx=g.shelterX,sz=g.shelterZ;float[] wc=new float[]{.31f,.22f,.13f,1};box(sx,1.0f,sz-1.0f,2.8f,1.9f,.16f,wc);box(sx-1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx+1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx,2.0f,sz,3.0f,.16f,2.2f,new float[]{.23f,.18f,.12f,1});}
             if(g.campfireBuilt){
                 box(g.campfireX,.12f,g.campfireZ,1.15f,.16f,.22f,new float[]{.24f,.16f,.09f,1});
