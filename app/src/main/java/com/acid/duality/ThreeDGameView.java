@@ -10,6 +10,7 @@ import android.graphics.Paint;
 import android.graphics.LinearGradient;
 import android.graphics.Shader;
 import android.graphics.Color;
+import android.graphics.Path;
 import android.graphics.Typeface;
 import android.text.InputType;
 import android.view.MotionEvent;
@@ -128,7 +129,8 @@ public class ThreeDGameView extends GLSurfaceView {
             super.onDraw(c); float w=getWidth(),h=getHeight();
             if(g.screen==0){
                 p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(5,11,25),Color.rgb(11,28,47),Color.rgb(26,16,42)},null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);
-                p.setColor(Color.argb(24,40,238,218));c.drawCircle(w*.78f,h*.42f,h*.48f,p);
+                p.setColor(Color.argb(24,160,176,141));c.drawCircle(w*.78f,h*.42f,h*.48f,p);
+                drawForestMenu(c,w,h);
                 text(c,"AFTERMATH",w*.065f,h*.24f,Math.min(66,w*.082f),Color.rgb(231,238,224),true);
                 fill(c,w*.09f,h*.275f,w*.24f,h*.285f,5,Color.rgb(70,255,214));
                 text(c,"THE ISLAND DOES NOT FORGIVE.",w*.065f,h*.35f,Math.min(18,w*.023f),Color.rgb(195,151,104),true);
@@ -179,6 +181,25 @@ public class ThreeDGameView extends GLSurfaceView {
                 if(g.nearInteract){ fill(c,w-208,h-112,w-22,h-48,16,Color.rgb(178,112,61));center(c,"E  СОБРАТЬ",w-115,h-72,Math.min(16,w*.02f),Color.rgb(20,18,12),true); }
             }
             postInvalidateDelayed(50);
+        }
+        void drawForestMenu(Canvas c,float w,float h){
+            p.setShader(null);
+            p.setColor(Color.argb(45,193,199,159));c.drawCircle(w*.82f,h*.24f,h*.105f,p);
+            for(int i=0;i<18;i++){
+                float x=w*(.42f+i*.035f),base=h*(.94f-(i%3)*.025f),s=.55f+(i%5)*.17f;
+                p.setColor(Color.argb(135+(i%3)*20,7,14,12));
+                c.drawRect(x-5*s,base-55*s,x+5*s,base,p);
+                Path tr=new Path();tr.moveTo(x,base-150*s);tr.lineTo(x-36*s,base-65*s);tr.lineTo(x+36*s,base-65*s);tr.close();c.drawPath(tr,p);
+                tr.reset();tr.moveTo(x,base-120*s);tr.lineTo(x-31*s,base-38*s);tr.lineTo(x+31*s,base-38*s);tr.close();c.drawPath(tr,p);
+            }
+            // distant crashed-aircraft silhouette in the fog
+            p.setColor(Color.argb(150,18,23,20));
+            c.save();c.rotate(-11,w*.78f,h*.54f);
+            c.drawRoundRect(w*.67f,h*.51f,w*.91f,h*.56f,12,12,p);
+            c.drawRoundRect(w*.72f,h*.47f,w*.87f,h*.60f,5,5,p);
+            c.drawRoundRect(w*.60f,h*.525f,w*.97f,h*.545f,5,5,p);
+            c.restore();
+            p.setColor(Color.argb(45,207,172,111));c.drawCircle(w*.74f,h*.62f,Math.min(w,h)*.075f,p);
         }
         void drawMenuHero(Canvas c,float x,float y,int col,float scale){
             float s=scale;fill(c,x-28*s,y-20*s,x+28*s,y+46*s,12,Color.argb(210,25,39,62));
