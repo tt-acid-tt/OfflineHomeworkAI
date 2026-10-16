@@ -15,6 +15,7 @@ import android.graphics.Typeface;
 import android.text.InputType;
 import android.view.MotionEvent;
 import android.view.View;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -28,9 +29,13 @@ import javax.microedition.khronos.opengles.GL10;
 public class ThreeDGameView extends GLSurfaceView {
     volatile int screen=0; // 0 menu, 1 room lobby, 2 game
     volatile int stage=0, moves=0, wood=0, scrap=0;
-    volatile boolean wreckSearched=false, campfireBuilt=false;
-    volatile float campfireX=0,campfireZ=0;
+    volatile boolean wreckSearched=false, campfireBuilt=false, blueprintMode=false, shelterBuilt=false;
+    volatile float campfireX=0,campfireZ=0, shelterX=0,shelterZ=0;
     volatile float sceneTime=0f;
+    volatile boolean skipHold=false;
+    volatile long skipHoldStart=0L;
+    volatile int nearTreeIndex=-1;
+    final int[] treeHits=new int[54];
     volatile int choiceIndex=0, peerChoice=0, resultCode=0, lastPeerResult=0;
     volatile boolean started=false, solo=false, ready=false;
     volatile float stickX=0, stickY=0, playerX=0, playerZ=0, yaw=0, pitch=0;
@@ -72,6 +77,14 @@ public class ThreeDGameView extends GLSurfaceView {
         if(lan.hosting && lan.connected) { started=true; screen=3; stage=0; ready=false; playerX=0;playerZ=0;yaw=0;pitch=0;sceneTime=0;notice="Крушение. Выживайте вместе."; }
         hud.invalidate();
     }
+    void placeBlueprint() {
+        if(screen!=2 || !blueprintMode) return;
+        if(shelterBuilt) { notice="Чертёж укрытия уже построен."; blueprintMode=false; hud.invalidate(); return; }
+        if(wood<4 || scrap<1) { notice="Для чертежа укрытия нужно 4 дерева и 1 металл."; hud.invalidate(); return; }
+        wood-=4; scrap--; shelterX=playerX+(float)Math.sin(yaw)*3.0f; shelterZ=playerZ-(float)Math.cos(yaw)*3.0f; shelterBuilt=true; blueprintMode=false;
+        notice="Чертёж установлен: укрытие собрано из материалов."; hud.invalidate();
+    }
+    void skipCutscene() { if(screen==3){screen=2;sceneTime=12.1f;playerX=0;playerZ=0;yaw=0;pitch=0;stickX=stickY=0;notice="Ты очнулся у места крушения. Осмотрись и выживи.";hud.invalidate();} }
     void craftCampfire() {
         if(screen!=2 || campfireBuilt) return;
         if(wood>=3 && scrap>=1) { wood-=3; scrap--; campfireBuilt=true; campfireX=playerX; campfireZ=playerZ-1.8f; notice="Костёр готов. Теперь можно пережить ночь."; }
@@ -89,11 +102,12 @@ public class ThreeDGameView extends GLSurfaceView {
         moves++;
         if(!wreckSearched && Math.abs(playerX)<3.2f && Math.abs(playerZ+8.5f)<4.0f) {
             wreckSearched=true; scrap+=2; wood++;
-            notice="Обломки обысканы: найден металл и обломки кресла.";
-        } else {
-            wood++;
-            notice="Собрано дерево: "+wood+"  •  металл: "+scrap;
-        }
+            notice="Обломки обысканы: найден металл и дерево.";
+        } else if(nearTreeIndex>=0) {
+            int i=nearTreeIndex;
+            if(treeHits[i]<3){treeHits[i]++;wood++;notice=treeHits[i]>=3?"Дерево повалено! Собери брёвна рядом.":"Удар топором: "+treeHits[i]+"/3. Дерево ослаблено.";}
+            else {wood+=2;notice="Собраны брёвна. Дерева: "+wood;treeHits[i]=4;}
+        } else { wood++; notice="Собрано дерево: "+wood+"  •  металл: "+scrap; }
         hud.invalidate();
     }
 
@@ -169,9 +183,12 @@ public class ThreeDGameView extends GLSurfaceView {
                 c.drawRect(0,0,w,h,p);p.setShader(null);
                 fill(c,w*.06f,h*.68f,w*.72f,h*.93f,18,Color.argb(175,7,12,10));
                 text(c,"FLIGHT 417  /  EMERGENCY",w*.09f,h*.74f,Math.min(15,w*.02f),Color.rgb(215,174,119),true);
-                String line=g.sceneTime<2.0f?"СИСТЕМНАЯ ОШИБКА…":g.sceneTime<4.2f?"УДАР! ДЕРЖИСЬ!":g.sceneTime<6.2f?"КАБИНА РАЗРУШАЕТСЯ…":"ТЫ ОЧНУЛСЯ НА НЕИЗВЕСТНОМ ОСТРОВЕ";
+                String line=g.sceneTime<2.0f?"FLIGHT 417 • АВТОПИЛОТ ОТКЛЮЧЁН":g.sceneTime<4.4f?"ТУРБУЛЕНТНОСТЬ! ДЕРЖИСЬ!":g.sceneTime<6.4f?"КРЫЛО ПОВРЕЖДЕНО • УДАР НЕИЗБЕЖЕН":g.sceneTime<8.0f?"…":g.sceneTime<10.0f?"СИРЕНА ЗАТИХАЕТ В ТУМАНЕ":"ТЫ ОДИН. НУЖНО НАЙТИ УКРЫТИЕ.";
                 text(c,line,w*.09f,h*.81f,Math.min(20,w*.027f),Color.rgb(237,237,224),true);
-                text(c,"Нажми в любом месте, чтобы пропустить",w*.09f,h*.88f,Math.min(13,w*.017f),Color.rgb(185,185,174),false);
+                text(c,"ЗАЖМИ ЭКРАН НА 3 СЕКУНДЫ, ЧТОБЫ ПРОПУСТИТЬ",w*.09f,h*.88f,Math.min(13,w*.017f),Color.rgb(220,220,204),true);
+                float progress=g.skipHold?Math.min(1f,(SystemClock.uptimeMillis()-g.skipHoldStart)/3000f):0f;
+                fill(c,w*.09f,h*.905f,w*.63f,h*.923f,6,Color.argb(110,210,220,210));
+                if(progress>0) fill(c,w*.09f,h*.905f,w*(.09f+.54f*progress),h*.923f,6,Color.rgb(223,174,105));
             } else {
                 fill(c,18,16,Math.min(w*.47f,460),105,14,Color.argb(190,9,15,11));
                 text(c,"AFTERMATH  /  DAY 01",34,42,17,Color.rgb(230,231,210),true);
@@ -180,6 +197,9 @@ public class ThreeDGameView extends GLSurfaceView {
                 fill(c,w-275,18,w-20,76,13,g.campfireBuilt?Color.argb(185,62,75,48):Color.argb(205,104,64,36));
                 center(c,g.campfireBuilt?"КОСТЁР ПОСТРОЕН":"СОЗДАТЬ КОСТЁР",w-147,42,Math.min(15,w*.019f),Color.rgb(244,231,205),true);
                 center(c,g.campfireBuilt?"ОГОНЬ СОХРАНИТ ТЕПЛО":"3 ДЕРЕВА + 1 МЕТАЛЛ",w-147,61,Math.min(11,w*.014f),Color.rgb(226,194,150),false);
+                fill(c,w-275,86,w-20,144,13,g.blueprintMode?Color.rgb(70,255,214):Color.argb(210,39,57,43));
+                center(c,g.blueprintMode?"ПОСТАВИТЬ ЧЕРТЁЖ":"ЧЕРТЁЖ УКРЫТИЯ",w-147,111,Math.min(15,w*.019f),g.blueprintMode?Color.rgb(4,20,31):Color.rgb(240,232,208),true);
+                center(c,g.shelterBuilt?"УКРЫТИЕ ГОТОВО":"4 ДЕРЕВА + 1 МЕТАЛЛ",w-147,130,Math.min(11,w*.014f),Color.rgb(226,194,150),false);
                 // Left movement stick.
                 float bx=Math.min(112,w*.12f),by=h-100;
                 p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(72,185,215,245));c.drawCircle(bx,by,62,p);
@@ -188,7 +208,8 @@ public class ThreeDGameView extends GLSurfaceView {
                 center(c,"ДВИЖЕНИЕ",bx,by+88,11,Color.argb(220,220,235,250),true);
                 // Look zone hint, no extra directional buttons.
                 center(c,"СВАЙП — СМОТРЕТЬ • СТИК — ИДТИ",w*.69f,h-20,Math.min(13,w*.016f),Color.argb(185,225,236,250),true);
-                if(g.nearInteract){ fill(c,w-208,h-112,w-22,h-48,16,Color.rgb(178,112,61));center(c,"E  СОБРАТЬ",w-115,h-72,Math.min(16,w*.02f),Color.rgb(20,18,12),true); }
+                if(g.nearInteract){ fill(c,w-208,h-112,w-22,h-48,16,Color.rgb(178,112,61));center(c,g.nearTreeIndex>=0?(g.treeHits[g.nearTreeIndex]>=3?"E  СОБРАТЬ БРЁВНА":"E  РУБИТЬ ДЕРЕВО"):"E  ОБЫСКАТЬ",w-115,h-72,Math.min(15,w*.019f),Color.rgb(20,18,12),true); }
+                if(!g.notice.isEmpty()) text(c,g.notice,Math.max(18,w*.28f),h*.94f,Math.min(13,w*.016f),Color.rgb(232,222,199),true);
             }
             postInvalidateDelayed(50);
         }
@@ -242,9 +263,10 @@ public class ThreeDGameView extends GLSurfaceView {
             }
             switch(e.getActionMasked()){
                 case MotionEvent.ACTION_DOWN: {
-                    if(g.screen==3){g.screen=2;g.sceneTime=8.6f;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;g.hud.invalidate();return true;}
+                    if(g.screen==3){g.skipHold=true;g.skipHoldStart=SystemClock.uptimeMillis();return true;}
                     int id=e.getPointerId(0); lastX=x;lastY=y;
-                    if(y<88&&x>w-300){g.craftCampfire();return true;}
+                    if(y<80&&x>w-300){g.craftCampfire();return true;}
+                    if(y>=82&&y<150&&x>w-300){if(g.blueprintMode)g.placeBlueprint();else {g.blueprintMode=true;g.notice="Выбери место для чертежа и нажми кнопку ещё раз.";g.hud.invalidate();}return true;}
                     if(g.nearInteract&&y>h-140&&x>w-220){g.interact();return true;}
                     if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
                     else {look=true;lookPointer=id;}
@@ -270,6 +292,7 @@ public class ThreeDGameView extends GLSurfaceView {
                     return true;
                 }
                 case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
+                    if(g.screen==3){if(e.getActionMasked()==MotionEvent.ACTION_UP && g.skipHold && SystemClock.uptimeMillis()-g.skipHoldStart>=3000L)g.skipCutscene();g.skipHold=false;g.skipHoldStart=0L;g.hud.invalidate();return true;}
                     stick=false;look=false;stickPointer=lookPointer=-1;g.stickX=g.stickY=0;return true;
             }
             return true;
@@ -310,7 +333,7 @@ public class ThreeDGameView extends GLSurfaceView {
             elapsed+=.025f;
             if(g.screen==3){
                 g.sceneTime+=.025f;
-                if(g.sceneTime>=8.5f){g.screen=2;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;}
+                if(g.sceneTime>=12.0f){g.screen=2;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;g.notice="Ты очнулся у места крушения. Осмотрись и выживи.";g.hud.invalidate();}
             }
             if(g.screen==3 && g.started) g.packetTick();
             if(g.screen==2 && g.started){
@@ -321,24 +344,16 @@ public class ThreeDGameView extends GLSurfaceView {
                 px=Math.max(-22f,Math.min(22f,px));pz=Math.max(-78f,Math.min(8f,pz));
                 g.playerX=px;g.playerZ=pz;g.packetTick();
                 if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* state is shared through LAN packets */ }
-                g.nearInteract=(!g.wreckSearched&&Math.abs(px)<3.2f&&Math.abs(pz+8.5f)<4.0f)||nearTree(px,pz);
+                g.nearTreeIndex=findNearTree(px,pz);
+                g.nearInteract=(!g.wreckSearched&&Math.abs(px)<3.2f&&Math.abs(pz+8.5f)<4.0f)||g.nearTreeIndex>=0;
             } else if(g.screen!=3){px=g.playerX;pz=g.playerZ;}
             float eyeY=1.66f,camX=px,camZ=pz,camYaw=g.yaw,camPitch=g.pitch;
             if(g.screen==3){
                 float t=g.sceneTime;
-                if(t<5.0f){
-                    camX=(float)Math.sin(t*5.4f)*(.04f+t*.035f);
-                    camZ=3.4f-t*1.15f;
-                    eyeY=1.62f-Math.max(0,t-2.8f)*.17f;
-                    camYaw=(float)Math.sin(t*7.5f)*(.025f+t*.018f);
-                    camPitch=(float)Math.sin(t*6.8f)*.06f+(t>2.7f?-.15f:0);
-                } else {
-                    float settle=Math.min(1f,(t-5f)/2f);
-                    camX=(float)Math.sin(t*16f)*.05f*(1-settle);
-                    camZ=-1.5f-settle*1.0f;
-                    eyeY=1.05f+settle*.55f;
-                    camPitch=-.14f*(1-settle);
-                }
+                if(t<2.4f){camX=(float)Math.sin(t*2.2f)*.025f;camZ=3.7f-t*.28f;eyeY=1.64f;camYaw=(float)Math.sin(t*1.7f)*.035f;camPitch=(float)Math.sin(t*2.4f)*.025f;}
+                else if(t<5.3f){float crash=t-2.4f;float shake=Math.min(1f,crash*.7f);camX=(float)Math.sin(t*19f)*(.08f+shake*.18f);camZ=3.0f-crash*1.9f;eyeY=1.62f-(float)Math.pow(crash/2.9f,2)*.55f;camYaw=(float)Math.sin(t*13f)*(.08f+shake*.13f);camPitch=(float)Math.sin(t*17f)*(.12f+shake*.18f)-.18f;}
+                else if(t<8.0f){float hit=t-5.3f;camX=(float)Math.sin(t*21f)*.16f*(1-hit/2.7f);camZ=-2.5f+hit*.38f;eyeY=.72f+(float)Math.min(1,hit*.55f)*.22f;camYaw=(float)Math.sin(t*12f)*.12f;camPitch=-.5f+(float)Math.sin(t*3f)*.08f;}
+                else {float settle=Math.min(1f,(t-8f)/3.2f);camX=(float)Math.sin(t*8f)*.025f*(1-settle);camZ=-1.5f-settle*.7f;eyeY=.94f+settle*.68f;camPitch=-.48f*(1-settle);camYaw=(float)Math.sin(t*1.3f)*.035f;}
             }
             float cy=(float)Math.cos(camYaw),sy=(float)Math.sin(camYaw),cp=(float)Math.cos(camPitch),sp=(float)Math.sin(camPitch);
             float tx=camX+sy*cp,tz=camZ-cy*cp,ty=eyeY+sp;
@@ -376,7 +391,7 @@ public class ThreeDGameView extends GLSurfaceView {
             box(-3.2f,.25f,-7.2f,1.1f,.2f,.8f,new float[]{.31f,.3f,.25f,1});
             box(4.2f,.15f,-15.5f,2.0f,.2f,1.3f,new float[]{.3f,.31f,.28f,1});
             // Broken aircraft interior visible during the crash sequence.
-            if(g.screen==3 && g.sceneTime<5.15f){
+            if(g.screen==3 && g.sceneTime<6.4f){
                 box(-2.05f,1.5f,-1.0f,.16f,2.8f,12f,new float[]{.22f,.24f,.23f,1});
                 box(2.05f,1.5f,-1.0f,.16f,2.8f,12f,new float[]{.22f,.24f,.23f,1});
                 box(0,2.9f,-1.0f,4.2f,.18f,12f,new float[]{.25f,.27f,.25f,1});
@@ -402,6 +417,7 @@ public class ThreeDGameView extends GLSurfaceView {
             }
             if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.38f,.4f,.32f,1}:new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.solo) remoteHero(0,-8,new float[]{.38f,.4f,.32f,1});
+            if(g.shelterBuilt){float sx=g.shelterX,sz=g.shelterZ;float[] wc=new float[]{.31f,.22f,.13f,1};box(sx,1.0f,sz-1.0f,2.8f,1.9f,.16f,wc);box(sx-1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx+1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx,2.0f,sz,3.0f,.16f,2.2f,new float[]{.23f,.18f,.12f,1});}
             if(g.campfireBuilt){
                 box(g.campfireX,.13f,g.campfireZ,1.15f,.16f,.22f,new float[]{.24f,.16f,.09f,1});
                 box(g.campfireX,.13f,g.campfireZ,.22f,.16f,1.15f,new float[]{.24f,.16f,.09f,1});
@@ -413,26 +429,24 @@ public class ThreeDGameView extends GLSurfaceView {
             GLES20.glDisableVertexAttribArray(posLoc);
         }
         void tree(float x,float z,float h,int seed){
-            float trunk=.28f+(seed%3)*.07f;
-            box(x,h*.42f,z,trunk,h*.9f,trunk,new float[]{.25f,.18f,.11f,1});
-            float green=.19f+(seed%4)*.025f;
-            box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});
-            box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});
-            box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});
+            int idx=seed<36?seed:seed-90+36;if(idx<0||idx>=g.treeHits.length)idx=Math.abs(seed)%g.treeHits.length;int hits=g.treeHits[idx];float trunk=.28f+(seed%3)*.07f;
+            if(hits>=3){box(x,.17f,z,trunk*1.8f,.32f,trunk*1.8f,new float[]{.31f,.23f,.14f,1});box(x+.8f,.22f,z-.25f,2.0f,.24f,.34f,new float[]{.29f,.20f,.12f,1});box(x+1.35f,.2f,z-.3f,.45f,.22f,.28f,new float[]{.34f,.25f,.15f,1});return;}
+            float trunkH=h*.9f*(hits==2?.8f:1f);box(x,trunkH*.47f,z,trunk,trunkH,trunk,new float[]{.25f,.18f,.11f,1});float green=.19f+(seed%4)*.025f-(hits*.025f);
+            box(x,h*.95f,z,1.9f,1.6f,1.8f,new float[]{green,.29f,.16f,1});box(x-.48f,h*1.16f,z+.2f,1.2f,1.1f,1.25f,new float[]{green*.9f,.25f,.14f,1});box(x+.48f,h*1.13f,z-.18f,1.15f,1.05f,1.2f,new float[]{green*1.05f,.31f,.17f,1});
         }
-        boolean nearTree(float x,float z){
+        int findNearTree(float x,float z){
             for(int i=0;i<36;i++){
                 float tz=5f-(i/5)*6.1f;
                 float tx=-25f+(i%5)*12.3f+((i%2)*1.8f);
                 if(Math.abs(tx)<4.5f && tz>-18) tx+=tx<0?-5.5f:5.5f;
-                if(Math.abs(x-tx)<1.7f && Math.abs(z-tz)<1.7f) return true;
+                if(Math.abs(x-tx)<1.7f && Math.abs(z-tz)<1.7f) return i;
             }
             for(int i=0;i<18;i++){
                 float tz=3f-i*4.4f;
                 float tx=(i%2==0?-1:1)*(5.2f+(i%4)*1.3f);
-                if(Math.abs(x-tx)<1.5f && Math.abs(z-tz)<1.5f) return true;
+                if(Math.abs(x-tx)<1.5f && Math.abs(z-tz)<1.5f) return 36+i;
             }
-            return false;
+            return -1;
         }
         void bush(float x,float z,float s){
             box(x,.24f,z,s,.42f,s*.8f,new float[]{.13f,.22f,.12f,1});
