@@ -27,12 +27,13 @@ import javax.microedition.khronos.opengles.GL10;
 public class ThreeDGameView extends GLSurfaceView {
     volatile int screen=0; // 0 menu, 1 room lobby, 2 game
     volatile int stage=0, moves=0;
+    volatile float sceneTime=0f;
     volatile int choiceIndex=0, peerChoice=0, resultCode=0, lastPeerResult=0;
     volatile boolean started=false, solo=false, ready=false;
     volatile float stickX=0, stickY=0, playerX=0, playerZ=0, yaw=0, pitch=0;
     volatile float peerX=0, peerZ=-7, peerYaw=0;
     volatile boolean peerReady=false, confirmed=false;
-    volatile String notice="Создайте комнату или подключитесь к другу";
+    volatile String notice="Выживание начинается после крушения";
     volatile boolean nearInteract=false;
     final LanSession lan = new LanSession();
     final World renderer;
@@ -50,31 +51,27 @@ public class ThreeDGameView extends GLSurfaceView {
     }
     void hostRoom() {
         solo=false; started=false; screen=1; stage=0; ready=false; moves=0;
-        playerX=0; playerZ=0; yaw=0; pitch=0;
-        lan.host();
-        notice="Комната создана";
-        hud.invalidate();
+        playerX=0; playerZ=0; yaw=0; pitch=0; sceneTime=0;
+        lan.host(); notice="Остров ждёт"; hud.invalidate();
     }
     void joinRoom(String ip) {
         solo=false; started=false; screen=1; stage=0; ready=false;
-        playerX=0; playerZ=0; yaw=0; pitch=0;
-        lan.join(ip);
-        notice="Подключение...";
-        hud.invalidate();
+        playerX=0; playerZ=0; yaw=0; pitch=0; sceneTime=0;
+        lan.join(ip); notice="Подключение к острову..."; hud.invalidate();
     }
     void beginSolo() {
-        lan.close(); solo=true; started=true; screen=2; stage=0; ready=false; moves=0;
-        playerX=0; playerZ=0; yaw=0; pitch=0; stickX=stickY=0;
-        notice="Тренировка: пройдите по светящимся меткам";
+        lan.close(); solo=true; started=true; screen=3; stage=0; ready=false; moves=0;
+        playerX=0; playerZ=0; yaw=0; pitch=0; sceneTime=0; stickX=stickY=0;
+        notice="Крушение. Очнись и выберись из самолёта.";
         hud.invalidate();
     }
     void startOnlineGame() {
-        if(lan.hosting && lan.connected) { started=true; screen=2; stage=0; ready=false; playerX=0;playerZ=0;yaw=0;pitch=0;notice="Вместе откройте шлюзы"; }
+        if(lan.hosting && lan.connected) { started=true; screen=3; stage=0; ready=false; playerX=0;playerZ=0;yaw=0;pitch=0;sceneTime=0;notice="Крушение. Выживайте вместе."; }
         hud.invalidate();
     }
     void backToMenu() {
-        lan.close(); screen=0; started=false; solo=false; ready=false; stickX=stickY=0;
-        notice="Создайте комнату или подключитесь к другу"; hud.invalidate();
+        lan.close(); screen=0; started=false; solo=false; ready=false; stickX=stickY=0; sceneTime=0;
+        notice="Выживание начинается после крушения"; hud.invalidate();
     }
     void selectPrevious() { if(screen==2 && nearInteract && !confirmed){choiceIndex=(choiceIndex+3)%4;hud.invalidate();} }
     void selectNext() { if(screen==2 && nearInteract && !confirmed){choiceIndex=(choiceIndex+1)%4;hud.invalidate();} }
@@ -89,15 +86,15 @@ public class ThreeDGameView extends GLSurfaceView {
 
     void packetTick() {
         if(!solo && lan.connected) {
-            lan.setOutgoing(String.format(Locale.US,"%.3f,%.3f,%.3f,%d,%d,%d,%d,%d",playerX,playerZ,yaw,stage,started?1:0,ready?1:0,choiceIndex,resultCode));
+            lan.setOutgoing(String.format(Locale.US,"%.3f,%.3f,%.3f,%d,%d,%d,%d,%d",playerX,playerZ,yaw,stage,started?(screen==3?2:1):0,ready?1:0,choiceIndex,resultCode));
             String[] p=lan.remote.split(",");
             if(p.length>=8) try {
                 peerX=Float.parseFloat(p[0]); peerZ=Float.parseFloat(p[1]); peerYaw=Float.parseFloat(p[2]);
-                int remoteStage=Integer.parseInt(p[3]); boolean remoteStarted=Integer.parseInt(p[4])==1;
+                int remoteStage=Integer.parseInt(p[3]); int remoteState=Integer.parseInt(p[4]); boolean remoteStarted=remoteState>0;
                 peerReady=Integer.parseInt(p[5])==1; peerChoice=Integer.parseInt(p[6]); int remoteResult=Integer.parseInt(p[7]);
                 if(!lan.hosting) {
                     boolean stageChanged=remoteStage!=stage;
-                    stage=remoteStage; started=remoteStarted; if(started) screen=2;
+                    stage=remoteStage; started=remoteStarted; if(started) { int targetScreen=remoteState==2?3:2; if(screen!=targetScreen){screen=targetScreen;sceneTime=0;} }
                     if(stageChanged) {
                         confirmed=false; ready=false; choiceIndex=0;
                         notice=stage>=4?"Комплекс пройден!":"Новая комната. Сопоставьте подсказки.";
@@ -127,28 +124,28 @@ public class ThreeDGameView extends GLSurfaceView {
             if(g.screen==0){
                 p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(5,11,25),Color.rgb(11,28,47),Color.rgb(26,16,42)},null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);
                 p.setColor(Color.argb(24,40,238,218));c.drawCircle(w*.78f,h*.42f,h*.48f,p);
-                text(c,"DUALITY",w*.085f,h*.24f,Math.min(70,w*.09f),Color.WHITE,true);
+                text(c,"AFTERMATH",w*.065f,h*.24f,Math.min(66,w*.082f),Color.rgb(231,238,224),true);
                 fill(c,w*.09f,h*.275f,w*.24f,h*.285f,5,Color.rgb(70,255,214));
-                text(c,"TWO MINDS. ONE WAY OUT.",w*.09f,h*.35f,Math.min(19,w*.025f),Color.rgb(70,255,214),true);
-                text(c,"Кооперативная 3D-головоломка",w*.09f,h*.43f,Math.min(20,w*.026f),Color.rgb(211,225,245),false);
+                text(c,"THE ISLAND DOES NOT FORGIVE.",w*.065f,h*.35f,Math.min(18,w*.023f),Color.rgb(195,151,104),true);
+                text(c,"ВЫЖИВАНИЕ • ГЛУХОЙ ЛЕС • ОБЛОМКИ",w*.065f,h*.43f,Math.min(18,w*.023f),Color.rgb(211,218,203),false);
                 float bw=w*.30f,bx=w*.09f,top=h*.52f,bh=h*.105f,gap=h*.025f;
-                fill(c,bx,top,bx+bw,top+bh,18,Color.rgb(70,255,214));center(c,"СОЗДАТЬ КОМНАТУ",bx+bw/2,top+bh*.64f,Math.min(20,w*.025f),Color.rgb(4,20,31),true);
+                fill(c,bx,top,bx+bw,top+bh,18,Color.rgb(70,255,214));center(c,"СОВМЕСТНОЕ ВЫЖИВАНИЕ",bx+bw/2,top+bh*.64f,Math.min(18,w*.023f),Color.rgb(4,20,31),true);
                 fill(c,bx,top+bh+gap,bx+bw,top+2*bh+gap,18,Color.argb(220,28,46,69));stroke(c,bx,top+bh+gap,bx+bw,top+2*bh+gap,18,Color.argb(100,120,200,230),1);
-                center(c,"ПОДКЛЮЧИТЬСЯ ПО IP",bx+bw/2,top+bh+gap+bh*.64f,Math.min(19,w*.023f),Color.WHITE,true);
+                center(c,"ПОДКЛЮЧИТЬСЯ К ДРУГУ",bx+bw/2,top+bh+gap+bh*.64f,Math.min(18,w*.022f),Color.WHITE,true);
                 fill(c,bx,top+2*(bh+gap),bx+bw,top+3*bh+2*gap,18,Color.argb(130,28,46,69));
-                center(c,"ТРЕНИРОВКА",bx+bw/2,top+2*(bh+gap)+bh*.64f,Math.min(19,w*.023f),Color.rgb(202,216,239),true);
+                center(c,"НОВАЯ ИГРА",bx+bw/2,top+2*(bh+gap)+bh*.64f,Math.min(19,w*.023f),Color.rgb(225,232,216),true);
                 // Clean two-character key art, only on menu.
                 drawMenuHero(c,w*.72f,h*.54f,Color.rgb(255,73,107),1.0f);
                 drawMenuHero(c,w*.84f,h*.49f,Color.rgb(65,145,255),0.88f);
-                text(c,"ОДНА СЕТЬ Wi-Fi  •  ДВА ИГРОКА",w*.58f,h*.84f,Math.min(16,w*.019f),Color.rgb(155,180,212),true);
+                text(c,"ПОСЛЕ КАТАСТРОФЫ НАЧИНАЕТСЯ БОРЬБА",w*.49f,h*.84f,Math.min(14,w*.018f),Color.rgb(185,174,151),true);
             } else if(g.screen==1){
                 p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(5,12,25),Color.rgb(10,27,44)},null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);
-                text(c,"КОМНАТА DUALITY",w*.09f,h*.22f,Math.min(38,w*.05f),Color.WHITE,true);
+                text(c,"ЭКСПЕДИЦИЯ НА ОСТРОВ",w*.09f,h*.22f,Math.min(36,w*.047f),Color.WHITE,true);
                 text(c,g.lan.hosting?"Передай другу IP-адрес ниже. Оба телефона должны быть в одной Wi-Fi сети.":"Подключаемся к комнате друга в этой же Wi-Fi сети.",w*.09f,h*.32f,Math.min(18,w*.022f),Color.rgb(194,213,237),false);
-                if(g.lan.hosting){text(c,"ТВОЙ IP: "+LanSession.localIp(),w*.09f,h*.44f,Math.min(26,w*.033f),Color.rgb(70,255,214),true);text(c,"ПОРТ: "+LanSession.PORT,w*.09f,h*.50f,18,Color.WHITE,true);}
+                if(g.lan.hosting){text(c,"IP ХОСТА: "+LanSession.localIp(),w*.09f,h*.44f,Math.min(26,w*.033f),Color.rgb(190,174,135),true);text(c,"ПОРТ: "+LanSession.PORT,w*.09f,h*.50f,18,Color.WHITE,true);}
                 text(c,g.lan.status,w*.09f,h*.60f,Math.min(19,w*.024f),g.lan.connected?Color.rgb(70,255,214):Color.rgb(255,195,104),true);
                 if(g.lan.hosting && g.lan.connected){
-                    fill(c,w*.62f,h*.68f,w*.88f,h*.81f,18,Color.rgb(70,255,214));center(c,"НАЧАТЬ ИГРУ",w*.75f,h*.755f,19,Color.rgb(4,20,31),true);
+                    fill(c,w*.62f,h*.68f,w*.88f,h*.81f,18,Color.rgb(70,255,214));center(c,"НАЧАТЬ ВЫЖИВАНИЕ",w*.75f,h*.755f,18,Color.rgb(4,20,31),true);
                 } else if(!g.lan.hosting && g.lan.connected){
                     center(c,"Ждём, пока создатель комнаты начнёт игру…",w*.5f,h*.77f,18,Color.WHITE,false);
                 }
@@ -241,7 +238,7 @@ public class ThreeDGameView extends GLSurfaceView {
                     for(int i=0;i<e.getPointerCount();i++){
                         int id=e.getPointerId(i);float tx=e.getX(i),ty=e.getY(i);
                         if(stick&&id==stickPointer)updateStick(tx,ty,w,h);
-                        if(look&&id==lookPointer){float dx=tx-lastX,dy=ty-lastY;g.yaw+=dx*.006f;g.pitch=Math.max(-0.72f,Math.min(0.72f,g.pitch+dy*.0045f));lastX=tx;lastY=ty;}
+                        if(look&&id==lookPointer){float dx=tx-lastX,dy=ty-lastY;g.yaw+=dx*.006f;g.pitch=Math.max(-0.82f,Math.min(0.82f,g.pitch-dy*.0065f));lastX=tx;lastY=ty;}
                     }
                     return true;
                 case MotionEvent.ACTION_POINTER_UP: {
