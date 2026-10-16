@@ -18,7 +18,9 @@ public class MainActivity extends Activity {
     GameView game;
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().getDecorView().setSystemUiVisibility(5894 | 1024 | 512 | 4096);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (Build.VERSION.SDK_INT >= 28) { WindowManager.LayoutParams lp = getWindow().getAttributes(); lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES; getWindow().setAttributes(lp); }
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         game = new GameView(this);
         setContentView(game);
     }
@@ -80,16 +82,17 @@ public class MainActivity extends Activity {
             postInvalidateDelayed(33);
         }
         void drawMenu(float w,float h){
-            text("DUALITY",w*.075f,h*.22f,Math.min(58,w*.075f),WHITE,true);
+            p.setShader(new RadialGradient(w*.23f,h*.23f,w*.34f,new int[]{Color.argb(48,96,255,210),Color.argb(18,71,157,255),Color.TRANSPARENT},null,Shader.TileMode.CLAMP)); c.drawRect(0,0,w,h,p); p.setShader(null);
+            text("DUALITY",w*.075f,h*.22f,Math.min(62,w*.078f),WHITE,true);
             rect(w*.078f,h*.245f,w*.21f,h*.253f,4,MINT);
-            text("TWO MINDS. ONE WAY OUT.",w*.08f,h*.30f,Math.min(18,w*.024f),MUTED,true);
+            text("TWO MINDS. ONE WAY OUT.",w*.08f,h*.30f,Math.min(19,w*.025f),MINT,true);
             text("ДВА ИГРОКА. ОДНА ГОЛОВОЛОМКА.",w*.08f,h*.38f,Math.min(17,w*.022f),WHITE,false);
             // Isometric platform and two softly bobbing 3D-styled characters.
             drawPlatform(w*.53f,h*.19f,w*.40f,h*.58f);
             drawCharacter(w*.64f,h*.48f,RED,(float)Math.sin(anim)*4,true);
             drawCharacter(w*.82f,h*.48f,BLUE,(float)Math.cos(anim*1.2f)*4,true);
             center("01",w*.64f,h*.67f,15,RED,true);center("02",w*.82f,h*.67f,15,BLUE,true);
-            button("play","ИГРАТЬ",w*.08f,h*.56f,w*.25f,h*.115f,MINT,true);
+            button("play","▶   ИГРАТЬ",w*.08f,h*.56f,w*.27f,h*.115f,MINT,true);
             button("how","КАК ИГРАТЬ",w*.08f,h*.70f,w*.25f,h*.10f,BLUE,false);
             text("CO-OP PUZZLE  •  2 PLAYERS  •  LANDSCAPE",w*.08f,h*.91f,12,MUTED,true);
             button("settings","⚙",w*.91f,h*.07f,w*.055f,h*.10f,BLUE,false);
