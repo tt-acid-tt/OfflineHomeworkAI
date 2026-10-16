@@ -227,7 +227,7 @@ public class MainActivity extends Activity {
             if(room==0||room==4){drawCube3D(l+(r-l)*.285f,t+(b-t)*.77f,(r-l)*.105f,14,9,RED);drawCube3D(l+(r-l)*.715f,t+(b-t)*.77f,(r-l)*.105f,14,9,BLUE);center("A",l+(r-l)*.285f,t+(b-t)*.77f+3,11,WHITE,true);center("B",l+(r-l)*.715f,t+(b-t)*.77f+3,11,WHITE,true);}
             if(room==1){drawCube3D(l+(r-l)*.23f,t+(b-t)*.42f,(r-l)*.20f,12,23,GOLD);center("4  1  7",l+(r-l)*.23f,t+(b-t)*.36f,18,GOLD,true);}
             if(room==2){for(int i=0;i<5;i++){float xx=l+(r-l)*(.30f+i*.09f);float yy=t+(b-t)*(.62f+i*.055f);drawCube3D(xx,yy,(r-l)*.045f,8,5,(pathHint||i==0)?MINT:Color.rgb(70,91,119));if(pathHint)center(""+(i+1),xx,yy-7,9,WHITE,true);}}
-            if(room==3){drawCube3D(l+(r-l)*.16f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverLeft?MINT:GOLD);drawCube3D(r-(r-l)*.16f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverRight?MINT:BLUE);}
+            if(room==3){drawCube3D(l+(r-l)*.245f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverLeft?MINT:GOLD);drawCube3D(r-(r-l)*.245f,t+(b-t)*.46f,(r-l)*.075f,12,24,leverRight?MINT:BLUE);}
             if(room==5){drawCube3D((l+r)/2,t+(b-t)*.58f,(r-l)*.16f,18,36,doorOpen?MINT:BLUE);}
             float ax=l+(r-l)*(.22f+px*.54f), ay=t+(b-t)*(.58f+py*.25f);
             float bx=l+(r-l)*(.22f+ox*.54f), by=t+(b-t)*(.58f+oy*.25f);
@@ -370,7 +370,7 @@ public class MainActivity extends Activity {
         void updateJoystick(float x,float y){float cx=getWidth()*.145f,cy=getHeight()*.815f,r=Math.min(getWidth()*.105f,getHeight()*.17f);stickX=Math.max(-1,Math.min(1,(x-cx)/r));stickY=Math.max(-1,Math.min(1,(y-cy)/r));}
         void performJoystickMove(){long now=System.currentTimeMillis();if(now-lastStickMove<145)return;float dx=Math.abs(stickX)>.30f?(stickX>0?.055f:-.055f):0;float dy=Math.abs(stickY)>.30f?(stickY>0?.055f:-.055f):0;if(dx==0&&dy==0)return;movePlayer(dx,dy);lastStickMove=now;}
         void movePlayer(float dx,float dy){if(soloMode&&soloBlue){ox=Math.max(.03f,Math.min(.97f,ox+dx));oy=Math.max(.05f,Math.min(.95f,oy+dy));}else{px=Math.max(.03f,Math.min(.97f,px+dx));py=Math.max(.05f,Math.min(.95f,py+dy));}moves++;if(!soloMode)sendState();}
-        boolean playersOnPlates(){return px<.20f&&ox>.80f;}
+        boolean playersOnPlates(){return red?(px<.20f&&ox>.80f):(px>.80f&&ox<.20f);}
         void click(String id){
             switch(id){
                 case "play":soloMode=false;screen=1;break;
@@ -526,7 +526,7 @@ public class MainActivity extends Activity {
             }
             if(room==1){showPopup("КЛАВИАТУРА ДОСТУПА","На стене записана последовательность 4 → 1 → 7. Выбери код, который совпадает с подсказкой.",new String[]{"417","471","147","ОТМЕНА"},()->completePuzzleRoom(),()->showPopup("НЕВЕРНЫЙ КОД","Порядок цифр не совпал с подсказкой на стене. Попробуй ещё раз.",new String[]{"ПОВТОРИТЬ"},()->doAction()),()->showPopup("НЕВЕРНЫЙ КОД","Порядок цифр не совпал с подсказкой на стене. Попробуй ещё раз.",new String[]{"ПОВТОРИТЬ"},()->doAction()),()->{});return;}
             if(room==2){if(!pathHint){pathHint=true;showPopup("СКАНЕР ВКЛЮЧЁН","Бирюзовые плитки показывают безопасный путь. Иди по ним к дальней стороне комнаты, затем нажми «ДЕЙСТВИЕ».",new String[]{"ПОНЯТНО"},()->{});}else if((soloBlue?ox:px)>.78f){completePuzzleRoom();}else showPopup("ПУТЬ ЕЩЁ НЕ ПРОЙДЕН","Двигайся вправо по подсвеченным плиткам до конца моста.",new String[]{"ПОНЯТНО"},()->{});return;}
-            if(room==3){float activeX=soloBlue?ox:px; if(activeX<.28f){leverLeft=true;send("LEVER,L");}else if(activeX>.72f){leverRight=true;send("LEVER,R");}else{showPopup("РЫЧАГИ","Подойди к одному из двух рычагов у края комнаты и нажми «ДЕЙСТВИЕ». Затем активируй второй.",new String[]{"ПОНЯТНО"},()->{});return;}if(leverLeft&&leverRight)completePuzzleRoom();else showPopup("РЫЧАГ АКТИВИРОВАН",leverLeft?"Левый рычаг включён. Теперь доберись до правого.":"Правый рычаг включён. Теперь доберись до левого.",new String[]{"ПРОДОЛЖИТЬ"},()->{});return;}
+            if(room==3){float activeX=soloBlue?ox:px; if(activeX<.22f){leverLeft=true;send("LEVER,L");}else if(activeX>.78f){leverRight=true;send("LEVER,R");}else{showPopup("РЫЧАГИ","Подойди к одному из двух рычагов у края комнаты и нажми «ДЕЙСТВИЕ». Затем активируй второй.",new String[]{"ПОНЯТНО"},()->{});return;}if(leverLeft&&leverRight)completePuzzleRoom();else showPopup("РЫЧАГ АКТИВИРОВАН",leverLeft?"Левый рычаг включён. Теперь доберись до правого.":"Правый рычаг включён. Теперь доберись до левого.",new String[]{"ПРОДОЛЖИТЬ"},()->{});return;}
             if(room==5){if(Math.abs(px-.5f)<.17f&&Math.abs(ox-.5f)<.17f){showPopup("ВЫХОД ОТКРЫТ","Оба персонажа добрались до выхода. Тестовое прохождение завершено!",new String[]{"В МЕНЮ"},()->{closeNetwork();soloMode=false;screen=0;});}else showPopup("СОБЕРИТЕСЬ У ВЫХОДА","Приведи обоих персонажей к центральной двери. В одиночном режиме переключай персонажа кнопкой сверху.",new String[]{"ПОНЯТНО"},()->{});return;}
             invalidate();
         }
