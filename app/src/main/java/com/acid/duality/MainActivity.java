@@ -106,27 +106,72 @@ public class MainActivity extends Activity {
             button("bt","ВЫБРАТЬ",w*.60f,h*.665f,w*.18f,h*.055f,RED,true);
         }
         void drawLobby(float w,float h){
-            button("back","← В МЕНЮ",w*.05f,h*.06f,w*.15f,h*.085f,BLUE,false);
-            center("КОМНАТА ОЖИДАНИЯ",w/2,h*.14f,27,WHITE,true);
-            text(mode==0?"WI-FI • TCP":"BLUETOOTH",w*.07f,h*.24f,14,MINT,true);
-            rect(w*.07f,h*.30f,w*.93f,h*.66f,22,PANEL);
-            // player cards
-            drawPlayerCard(w*.12f,h*.36f,w*.43f,h*.59f,host?"ВЫ • ХОСТ":"ИГРОК 1",red?RED:BLUE,true);
-            drawPlayerCard(w*.57f,h*.36f,w*.88f,h*.59f,connected?"ИГРОК 2":"ОЖИДАНИЕ ИГРОКА…",connected?(red?BLUE:RED):MUTED,connected);
-            if(host){
-                button("color","СМЕНИТЬ ЦВЕТ",w*.36f,h*.70f,w*.28f,h*.09f,GOLD,false);
-                button("start","НАЧАТЬ ИГРУ",w*.67f,h*.79f,w*.25f,h*.105f,MINT,connected);
-                text(connected?"ОБА ИГРОКА ГОТОВЫ":"ПОДЕЛИТЕСЬ ПОДКЛЮЧЕНИЕМ",w*.08f,h*.84f,13,MUTED,true);
-            } else {
-                center(status,w/2,h*.80f,15,connected?MINT:GOLD,true);
+            // Full-bleed lobby backdrop: layered aurora, portal rings and floating light.
+            p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.rgb(9,18,39),Color.rgb(17,25,53),Color.rgb(31,16,43)},null,Shader.TileMode.CLAMP));
+            c.drawRect(0,0,w,h,p);p.setShader(null);
+            p.setShader(new RadialGradient(w*.23f,h*.47f,w*.38f,new int[]{Color.argb(90,255,50,86),Color.argb(25,255,50,86),Color.TRANSPARENT},null,Shader.TileMode.CLAMP));
+            c.drawRect(0,0,w,h,p);p.setShader(null);
+            p.setShader(new RadialGradient(w*.78f,h*.45f,w*.40f,new int[]{Color.argb(100,40,135,255),Color.argb(25,40,135,255),Color.TRANSPARENT},null,Shader.TileMode.CLAMP));
+            c.drawRect(0,0,w,h,p);p.setShader(null);
+            for(int i=0;i<34;i++){
+                float xx=(i*137f+(float)Math.sin(anim*.8f+i)*22)%w;
+                float yy=(i*71f+(float)Math.cos(anim*.55f+i)*17)%h;
+                p.setColor(Color.argb(35+(i%5)*13,160,210,255));c.drawCircle(xx,yy,1.2f+(i%3)*.65f,p);
             }
-            if(mode==0) text(host?"АДРЕС ХОСТА: "+localIp()+" : 47822":"ПОДКЛЮЧЕНИЕ ПО IP",w*.08f,h*.94f,14,WHITE,true);
-            else text("Bluetooth: сначала сопрягите устройства в настройках телефона",w*.08f,h*.94f,13,MUTED,false);
+            // Large, subtle portals behind the player cards.
+            drawPortal(w*.27f,h*.47f,Math.min(w*.16f,h*.32f),RED,anim);
+            drawPortal(w*.75f,h*.47f,Math.min(w*.16f,h*.32f),BLUE,-anim*.8f);
+            button("back","← В МЕНЮ",w*.045f,h*.055f,w*.15f,h*.085f,BLUE,false);
+            center("КОМНАТА ОЖИДАНИЯ",w/2,h*.135f,Math.min(29,w*.038f),WHITE,true);
+            center("Два игрока • одна команда • один выход",w/2,h*.195f,Math.min(16,w*.022f),Color.rgb(169,188,218),false);
+            // Connection status pill
+            float pillW=w*.22f;
+            rect(w/2-pillW/2,h*.225f,w/2+pillW/2,h*.275f,22,Color.argb(180,13,25,44));
+            stroke(w/2-pillW/2,h*.225f,w/2+pillW/2,h*.275f,22,connected?MINT:Color.rgb(104,133,172),1.5f);
+            p.setColor(connected?MINT:GOLD);c.drawCircle(w/2-pillW*.37f,h*.25f,4,p);
+            center(connected?"ИГРОК ПОДКЛЮЧЁН":"ОЖИДАНИЕ НАПАРНИКА",w/2+7,h*.257f,Math.min(13,w*.017f),connected?MINT:GOLD,true);
+            // Floating translucent player cards.
+            float top=h*.315f,bottom=h*.705f;
+            rect(w*.095f,top,w*.455f,bottom,25,Color.argb(205,17,29,51));
+            stroke(w*.095f,top,w*.455f,bottom,25,Color.argb(205,RED),2);
+            rect(w*.545f,top,w*.905f,bottom,25,Color.argb(205,17,29,51));
+            stroke(w*.545f,top,w*.905f,bottom,25,connected?Color.argb(220,BLUE):Color.rgb(63,81,112),2);
+            drawPlayerCard(w*.11f,h*.34f,w*.44f,h*.68f,host?"ВЫ • ХОСТ":"ИГРОК 1",red?RED:BLUE,true);
+            drawPlayerCard(w*.56f,h*.34f,w*.89f,h*.68f,connected?"ИГРОК 2":"СВОБОДНОЕ МЕСТО",connected?(red?BLUE:RED):Color.rgb(105,126,158),connected);
+            if(host){
+                button("color","СМЕНИТЬ ЦВЕТ",w*.17f,h*.735f,w*.25f,h*.09f,GOLD,false);
+                button("start","НАЧАТЬ ИГРУ",w*.58f,h*.735f,w*.25f,h*.09f,MINT,connected);
+            }else{
+                center(status,w/2,h*.78f,Math.min(15,w*.02f),connected?MINT:GOLD,true);
+            }
+            String connectionLine=mode==0?(host?"ВАШ IP: "+localIp()+"  •  ПОРТ 47822":"ПОДКЛЮЧЕНИЕ ПО ЛОКАЛЬНОЙ СЕТИ"):"BLUETOOTH • СОПРЯГИТЕ УСТРОЙСТВА";
+            center(connectionLine,w/2,h*.91f,Math.min(13,w*.018f),Color.rgb(145,166,197),true);
+            center("DUALITY  /  CO-OP",w/2,h*.96f,11,Color.rgb(90,113,148),true);
+        }
+        void drawPortal(float x,float y,float radius,int color,float phase){
+            p.setStyle(Paint.Style.STROKE);
+            for(int i=0;i<4;i++){
+                float rr=radius*(.62f+i*.13f)+(float)Math.sin(phase+i)*2.5f;
+                p.setColor(Color.argb(25+i*13,Color.red(color),Color.green(color),Color.blue(color)));
+                p.setStrokeWidth(2.5f+i*.8f);
+                c.drawOval(x-rr,y-rr*1.18f,x+rr,y+rr*1.18f,p);
+            }
+            p.setStyle(Paint.Style.FILL);
+            p.setShader(new RadialGradient(x,y,radius,new int[]{Color.argb(35,Color.red(color),Color.green(color),Color.blue(color)),Color.TRANSPARENT},null,Shader.TileMode.CLAMP));
+            c.drawCircle(x,y,radius,p);p.setShader(null);
         }
         void drawPlayerCard(float l,float t,float r,float b,String name,int col,boolean active){
-            rect(l,t,r,b,18,Color.rgb(25,36,57));stroke(l,t,r,b,18,active?col:Color.rgb(60,73,95),2);
-            drawCharacter((l+r)/2,(t+b)*.55f,col,(float)Math.sin(anim*1.2f)*3,active);
-            center(name,(l+r)/2,b-17,15,active?WHITE:MUTED,true);
+            // Character is deliberately scaled up in lobby cards to read as the hero.
+            float cx=(l+r)/2, cy=t+(b-t)*.48f;
+            p.setColor(Color.argb(75,Color.red(col),Color.green(col),Color.blue(col)));
+            c.drawOval(cx-(r-l)*.14f,cy+(b-t)*.20f,cx+(r-l)*.14f,cy+(b-t)*.28f,p);
+            c.save();c.scale(1.8f,1.8f,cx,cy);
+            drawCharacter(cx,cy,col,(float)Math.sin(anim*1.2f)*2.5f,active);
+            c.restore();
+            center(name,cx,b-12,Math.min(17,(r-l)*.055f),active?WHITE:Color.rgb(148,166,194),true);
+            if(active){
+                rect(cx-(r-l)*.105f,b-35,cx+(r-l)*.105f,b-31,2,col);
+            }
         }
         void drawGame(float w,float h){
             text("DUALITY  /  "+(room+1)+" OF "+rooms.length,w*.04f,h*.07f,14,MUTED,true);
