@@ -91,7 +91,7 @@ public class ThreeDGameView extends GLSurfaceView {
         float bx=playerX+(float)Math.sin(yaw)*3.0f,bz=playerZ-(float)Math.cos(yaw)*3.0f;
         builtTypes[blueprintType]=true;buildX[blueprintType]=bx;buildZ[blueprintType]=bz;
         if(blueprintType==0){campfireBuilt=true;campfireX=bx;campfireZ=bz;}
-        else {shelterBuilt=true;shelterX=bx;shelterZ=bz;}
+        else if(blueprintType==5){shelterBuilt=true;shelterX=bx;shelterZ=bz;}
         blueprintMode=false; blueprintBookOpen=false;
         notice="Постройка размещена: "+new String[]{"костёр","фундамент","стена","потолок","дверной проём","укрытие"][blueprintType]; hud.invalidate();
     }
@@ -485,7 +485,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 else if(bt==4){box(bx-1.0f,1.0f,bz,1.0f,2.0f,.18f,wc);box(bx+1.0f,1.0f,bz,1.0f,2.0f,.18f,wc);box(bx,1.95f,bz,1.0f,.18f,.18f,wc);}
                 else {box(bx,1.0f,bz-1.0f,2.8f,1.9f,.16f,wc);box(bx-1.35f,1.0f,bz,.16f,1.9f,2.0f,wc);box(bx+1.35f,1.0f,bz,.16f,1.9f,2.0f,wc);box(bx,2.0f,bz,3.0f,.16f,2.2f,new float[]{.23f,.18f,.12f,1});}
             }
-            if(g.shelterBuilt){float sx=g.shelterX,sz=g.shelterZ;float[] wc=new float[]{.31f,.22f,.13f,1};box(sx,1.0f,sz-1.0f,2.8f,1.9f,.16f,wc);box(sx-1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx+1.35f,1.0f,sz,.16f,1.9f,2.0f,wc);box(sx,2.0f,sz,3.0f,.16f,2.2f,new float[]{.23f,.18f,.12f,1});}
+            
             if(g.campfireBuilt){
                 box(g.campfireX,.12f,g.campfireZ,1.15f,.16f,.22f,new float[]{.24f,.16f,.09f,1});
                 box(g.campfireX,.12f,g.campfireZ,.22f,.16f,1.15f,new float[]{.24f,.16f,.09f,1});
@@ -502,7 +502,7 @@ public class ThreeDGameView extends GLSurfaceView {
             // Solid aircraft hull and wings.
             if(Math.abs(x)<1.85f && z<-8.2f && z>-18.8f)return true;
             if(x>-8.6f&&x<-.2f&&z>-11.9f&&z<-8.8f)return true;
-            if(g.shelterBuilt&&Math.abs(x-g.shelterX)<1.65f&&Math.abs(z-g.shelterZ)<1.25f)return true;
+            if(g.builtTypes[5]&&Math.abs(x-g.shelterX)<1.65f&&Math.abs(z-g.shelterZ)<1.25f)return true;
             for(int i=0;i<36;i++){float tz=5f-(i/5)*6.1f;float tx=-25f+(i%5)*12.3f+((i%2)*1.8f);if(Math.abs(tx)<4.5f&&tz>-18)tx+=tx<0?-5.5f:5.5f;if(g.treeHits[i]<3&&Math.abs(x-tx)<.62f&&Math.abs(z-tz)<.62f)return true;}
             for(int i=0;i<18;i++){float tz=3f-i*4.4f;float tx=(i%2==0?-1:1)*(5.2f+(i%4)*1.3f);if(g.treeHits[36+i]<3&&Math.abs(x-tx)<.6f&&Math.abs(z-tz)<.6f)return true;}
             return false;
