@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
         Canvas c; Paint p = new Paint(3); final Handler handler = new Handler(Looper.getMainLooper());
         int screen=0; // menu, modes, lobby, game
         int mode=0; // wifi, bluetooth
-        boolean host=false, connected=false, started=false, red=true, showSettings=false;
+        boolean host=false, connected=false, started=false, red=true, showSettings=false, soloMode=false;
         String status="СОЗДАЙТЕ ЛОББИ ИЛИ ПОДКЛЮЧИТЕСЬ", ip="", roomName="ЗАЛ СИГНАЛОВ";
         Socket socket; ServerSocket server; BufferedReader reader; PrintWriter writer;
         volatile boolean discoveryRunning=false; Thread beaconThread;
@@ -102,6 +102,7 @@ public class MainActivity extends Activity {
             center("01",w*.64f,h*.67f,15,RED,true);center("02",w*.82f,h*.67f,15,BLUE,true);
             button("play","▶   ИГРАТЬ",w*.08f,h*.56f,w*.27f,h*.115f,MINT,true);
             button("how","КАК ИГРАТЬ",w*.08f,h*.70f,w*.25f,h*.10f,BLUE,false);
+            button("solo","ТЕСТ В ОДИНОЧКУ",w*.08f,h*.82f,w*.27f,h*.075f,GOLD,false);
             text("CO-OP PUZZLE  •  2 PLAYERS  •  LANDSCAPE",w*.08f,h*.91f,12,MUTED,true);
             button("settings","⚙",w*.91f,h*.07f,w*.055f,h*.10f,BLUE,false);
         }
@@ -185,7 +186,7 @@ public class MainActivity extends Activity {
             }
         }
         void drawGame(float w,float h){
-            text("DUALITY  /  "+(room+1)+" OF "+rooms.length,w*.04f,h*.07f,14,MUTED,true);
+            text("DUALITY  /  "+(soloMode?"ТЕСТ В ОДИНОЧКУ":(room+1)+" OF "+rooms.length),w*.04f,h*.07f,14,MUTED,true);
             text(rooms[Math.min(room,rooms.length-1)],w*.04f,h*.13f,Math.min(25,w*.035f),WHITE,true);
             drawRoom(0,h*.15f,w,h);
             float gx=w*.055f,gy=h*.69f,sz=Math.min(w*.065f,h*.13f);
@@ -227,7 +228,7 @@ public class MainActivity extends Activity {
             float ax=l+(r-l)*(.22f+px*.54f), ay=t+(b-t)*(.58f+py*.25f);
             float bx=l+(r-l)*(.22f+ox*.54f), by=t+(b-t)*(.58f+oy*.25f);
             drawCharacter(ax,ay,red?RED:BLUE,(float)Math.sin(anim*2)*2,true);
-            drawCharacter(bx,by,red?BLUE:RED,(float)Math.cos(anim*2)*2,connected);
+            drawCharacter(bx,by,red?BLUE:RED,(float)Math.cos(anim*2)*2,connected||soloMode);
             if(room==2&&!red&&!pathHint){rect(l+(r-l)*.27f,t+(b-t)*.60f,r-(r-l)*.27f,b,0,Color.argb(90,5,8,15));}
         }
         // Full humanoid characters with layered clothing, hair, seams and fine fabric texture.
@@ -339,12 +340,13 @@ public class MainActivity extends Activity {
         }
         void click(String id){
             switch(id){
-                case "play":screen=1;break;
+                case "play":soloMode=false;screen=1;break;
+                case "solo":closeNetwork();soloMode=true;connected=false;host=false;started=true;screen=3;room=0;progress=0;moves=0;doorOpen=false;pathHint=false;px=.18f;py=.65f;ox=.78f;oy=.65f;red=true;break;
                 case "settings":showSettings=true;break;
                 case "how":showPopup("КАК ИГРАТЬ","Красный и синий игроки видят разные подсказки. Обменивайтесь информацией, двигайтесь кнопками и нажимайте ДЕЙСТВИЕ у механизмов. Пройдите шесть комнат вместе.",new String[]{"ПОНЯТНО"},()->{});break;
                 case "back":if(screen==2){closeNetwork();screen=1;}else screen=0;break;
-                case "wifi":mode=0;showLobbyChoice();break;
-                case "bt":mode=1;showLobbyChoice();break;
+                case "wifi":soloMode=false;mode=0;showLobbyChoice();break;
+                case "bt":soloMode=false;mode=1;showLobbyChoice();break;
                 case "settingsBack":showSettings=false;break;
                 case "color":red=!red;send("COLOR,"+(red?"RED":"BLUE"));break;
                 case "start":if(host&&connected){started=true;screen=3;room=0;progress=0;doorOpen=false;send("START");}else toast("Сначала дождитесь второго игрока");break;
@@ -353,7 +355,7 @@ public class MainActivity extends Activity {
                 case "up":py=Math.max(.05f,py-.06f);moves++;sendState();break;
                 case "down":py=Math.min(.95f,py+.06f);moves++;sendState();break;
                 case "action":doAction();break;
-                case "exit":showPopup("ПОКИНУТЬ КОМНАТУ?","Прогресс текущей сессии будет остановлен.",new String[]{"ОСТАТЬСЯ","ВЫЙТИ"},()->{},()->{closeNetwork();screen=0;});break;
+                case "exit":showPopup("ПОКИНУТЬ КОМНАТУ?","Прогресс текущей сессии будет остановлен.",new String[]{"ОСТАТЬСЯ","ВЫЙТИ"},()->{},()->{closeNetwork();soloMode=false;screen=0;});break;
             }
             invalidate();
         }
@@ -482,13 +484,17 @@ public class MainActivity extends Activity {
             invalidate();
         }
         void doAction(){
-            if(room==0){progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
+            if(soloMode){
+                if(room==1){showPopup("ПАНЕЛЬ ДОСТУПА","На стене подсказка: 4 — 1 — 7. Нажмите «ОТКРЫТЬ», чтобы проверить код.",new String[]{"ОТМЕНА","ОТКРЫТЬ"},()->{},()->{doorOpen=true;advanceRoom();});return;}
+                doorOpen=true;
+            }else if(room==0){progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
             else if(room==1){showPopup("ПАНЕЛЬ ДОСТУПА","На стене подсказка: 4 — 1 — 7. Нажмите «ОТКРЫТЬ», чтобы проверить код.",new String[]{"ОТМЕНА","ОТКРЫТЬ"},()->{},()->{doorOpen=true;send("DOOR");invalidate();});return;}
             else if(room==2){pathHint=!pathHint;progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
             else {progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
-            if(doorOpen){room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;send("ROOM,"+room);if(room==rooms.length-1)toast("Финальная комната — найдите общий выход!");}
+            if(doorOpen){if(soloMode){advanceRoom();return;}room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;send("ROOM,"+room);if(room==rooms.length-1)toast("Финальная комната — найдите общий выход!");}
             invalidate();
         }
+        void advanceRoom(){room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;pathHint=false;if(room==rooms.length-1)toast(soloMode?"Последняя комната — тестируй финальную головоломку!":"Финальная комната — найдите общий выход!");invalidate();}
         String wifiIpAddress(){try{WifiManager wm=(WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);if(wm!=null){int v=wm.getConnectionInfo().getIpAddress();if(v!=0)return String.format(Locale.US,"%d.%d.%d.%d",v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255);}}catch(Exception ignored){}return localIp();}
         String localIp(){try{for(java.util.Enumeration<java.net.NetworkInterface> en=NetworkInterface.getNetworkInterfaces();en.hasMoreElements();){NetworkInterface ni=en.nextElement();for(java.util.Enumeration<InetAddress> a=ni.getInetAddresses();a.hasMoreElements();){InetAddress addr=a.nextElement();if(!addr.isLoopbackAddress()&&addr instanceof Inet4Address)return addr.getHostAddress();}}}catch(Exception ignored){}return "IP не найден";}
         void showDirectIpDialog(){EditText field=new EditText(MainActivity.this);field.setSingleLine(true);field.setInputType(android.text.InputType.TYPE_CLASS_PHONE);field.setHint("192.168.1.25");new AlertDialog.Builder(MainActivity.this).setTitle("IP-АДРЕС ХОСТА").setMessage("На телефоне, где создано лобби, посмотри IP на экране комнаты и введи его сюда. Оба телефона должны быть в одной Wi-Fi сети.").setView(field).setNegativeButton("ОТМЕНА",(d,w)->{}).setPositiveButton("ПОДКЛЮЧИТЬСЯ",(d,w)->{String address=field.getText().toString().trim();if(address.isEmpty()){toast("Введи IP-адрес телефона-хоста");return;}connectToLobby(address);}).show();}
@@ -528,7 +534,7 @@ public class MainActivity extends Activity {
             for(int i=0;i<n;i++){float by=listTop+i*(bh+gap);if(y>=by&&y<=by+bh){Runnable a=modalActions.get(i);modalOpen=false;invalidate();if(a!=null)a.run();return;}}
             if(x< w*.14f||x>w*.86f||y<t||y>t+mh){modalOpen=false;invalidate();}
         }
-        void back(){if(modalOpen){modalOpen=false;}else if(showSettings){showSettings=false;}else if(screen==3){screen=2;}else if(screen==2){closeNetwork();screen=1;}else if(screen==1)screen=0;else superBack();invalidate();}
+        void back(){if(modalOpen){modalOpen=false;}else if(showSettings){showSettings=false;}else if(screen==3){if(soloMode){soloMode=false;screen=0;}else screen=2;}else if(screen==2){closeNetwork();screen=1;}else if(screen==1)screen=0;else superBack();invalidate();}
         void superBack(){MainActivity.super.onBackPressed();}
     }
 }
