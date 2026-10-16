@@ -89,8 +89,10 @@ public class MainActivity extends Activity {
             text("ДВА ИГРОКА. ОДНА ГОЛОВОЛОМКА.",w*.08f,h*.38f,Math.min(17,w*.022f),WHITE,false);
             // Isometric platform and two softly bobbing 3D-styled characters.
             drawPlatform(w*.53f,h*.19f,w*.40f,h*.58f);
-            drawCharacter(w*.64f,h*.48f,RED,(float)Math.sin(anim)*4,true);
-            drawCharacter(w*.82f,h*.48f,BLUE,(float)Math.cos(anim*1.2f)*4,true);
+            c.save(); c.scale(2.75f,2.75f,w*.64f,h*.48f);
+            drawCharacter(w*.64f,h*.48f,RED,(float)Math.sin(anim)*1.5f,true); c.restore();
+            c.save(); c.scale(2.75f,2.75f,w*.82f,h*.48f);
+            drawCharacter(w*.82f,h*.48f,BLUE,(float)Math.cos(anim*1.2f)*1.5f,true); c.restore();
             center("01",w*.64f,h*.67f,15,RED,true);center("02",w*.82f,h*.67f,15,BLUE,true);
             button("play","▶   ИГРАТЬ",w*.08f,h*.56f,w*.27f,h*.115f,MINT,true);
             button("how","КАК ИГРАТЬ",w*.08f,h*.70f,w*.25f,h*.10f,BLUE,false);
@@ -222,23 +224,101 @@ public class MainActivity extends Activity {
             drawCharacter(bx,by,red?BLUE:RED,(float)Math.cos(anim*2)*2,connected);
             if(room==2&&!red&&!pathHint){rect(l+(r-l)*.27f,t+(b-t)*.60f,r-(r-l)*.27f,b,0,Color.argb(90,5,8,15));}
         }
+        // Full humanoid characters with layered clothing, hair, seams and fine fabric texture.
+        void drawPuzzleBackdrop(float w,float h,boolean prominent){
+            c.save();
+            c.rotate(-13,w*.5f,h*.5f);
+            float cell=Math.max(54,w*.105f);
+            for(int row=-2;row<=(int)(h/cell)+2;row++){
+                for(int col=-2;col<=(int)(w/cell)+2;col++){
+                    float x=col*cell+(row%2)*cell*.5f;
+                    float y=row*cell;
+                    int alpha=prominent?24:13;
+                    int tint=((row+col)&1)==0?MINT:BLUE;
+                    p.setColor(Color.argb(alpha,Color.red(tint),Color.green(tint),Color.blue(tint)));
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.4f);
+                    Path piece=new Path();
+                    float z=cell*.28f;
+                    piece.moveTo(x,y);piece.lineTo(x+cell*.30f,y);
+                    piece.cubicTo(x+cell*.30f,y-z*.6f,x+cell*.53f,y-z*.6f,x+cell*.53f,y);
+                    piece.lineTo(x+cell,y);piece.lineTo(x+cell,y+cell*.30f);
+                    piece.cubicTo(x+cell+z*.6f,y+cell*.30f,x+cell+z*.6f,y+cell*.53f,x+cell,y+cell*.53f);
+                    piece.lineTo(x+cell,y+cell);piece.lineTo(x+cell*.30f,y+cell);
+                    piece.cubicTo(x+cell*.30f,y+cell+z*.6f,x+cell*.53f,y+cell+z*.6f,x+cell*.53f,y+cell);
+                    piece.lineTo(x,y+cell);piece.close();c.drawPath(piece,p);
+                    p.setStyle(Paint.Style.FILL);
+                    if(prominent && ((row*3+col*5)%7==0)){
+                        p.setColor(Color.argb(13,Color.red(tint),Color.green(tint),Color.blue(tint)));
+                        c.drawRoundRect(x+cell*.12f,y+cell*.12f,x+cell*.88f,y+cell*.88f,8,8,p);
+                    }
+                }
+            }
+            p.setStyle(Paint.Style.FILL);c.restore();
+        }
         void drawCharacter(float x,float y,int color,float bob,boolean active){
-            float s=Math.max(1,getWidth()/1000f), r=14*s;
-            p.setColor(Color.argb(70,0,0,0));c.drawOval(x-r*1.2f,y+r*1.6f,x+r*1.2f,y+r*2.1f,p);
-            // Boots, arms and glossy highlights give both mascots a more polished silhouette.
-            rect(x-r*.66f,y+r*.52f+bob,x-r*.12f,y+r*1.42f+bob,4*s,Color.rgb(22,29,44));
-            rect(x+r*.12f,y+r*.52f+bob,x+r*.66f,y+r*1.42f+bob,4*s,Color.rgb(22,29,44));
-            p.setShader(new LinearGradient(x-r*1.2f,y-r*.1f,x+r*1.2f,y+r*.9f,brighten(color),color,Shader.TileMode.CLAMP));
-            c.drawRoundRect(x-r*1.18f,y-r*.27f+bob,x-r*.72f,y+r*.52f+bob,r*.22f,r*.22f,p);
-            c.drawRoundRect(x+r*.72f,y-r*.27f+bob,x+r*1.18f,y+r*.52f+bob,r*.22f,r*.22f,p);
-            c.drawRoundRect(x-r,y-r*.45f+bob,x+r,y+r*.8f+bob,r*.55f,r*.55f,p);p.setShader(null);
-            p.setShader(new LinearGradient(x-r*.6f,y-r*.35f,x+r*.25f,y+r*.55f,Color.argb(120,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP));
-            c.drawRoundRect(x-r*.68f,y-r*.28f+bob,x-r*.05f,y+r*.45f+bob,r*.25f,r*.25f,p);p.setShader(null);
-            p.setColor(brighten(color));c.drawCircle(x,y-r*.75f+bob,r*.76f,p);
-            p.setColor(Color.rgb(238,248,255));c.drawOval(x-r*.44f,y-r*.90f+bob,x-r*.04f,y-r*.55f+bob,p);c.drawOval(x+r*.05f,y-r*.90f+bob,x+r*.45f,y-r*.55f+bob,p);
-            p.setColor(Color.rgb(13,21,35));c.drawCircle(x-r*.22f,y-r*.72f+bob,r*.13f,p);c.drawCircle(x+r*.24f,y-r*.72f+bob,r*.13f,p);
-            p.setColor(Color.argb(150,255,255,255));c.drawCircle(x-r*.32f,y-r*.96f+bob,r*.09f,p);
-            if(active){p.setColor(Color.argb(90, color==RED?255:80,color==BLUE?170:90,255));c.drawCircle(x,y,r*1.55f,p);p.setColor(color);c.drawCircle(x,y,r*1.55f,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);c.drawCircle(x,y,r*1.55f,p);p.setStyle(Paint.Style.FILL);}
+            float scale=Math.max(.72f,getWidth()/1000f);
+            float u=scale;
+            float headR=5.7f*u;
+            float top=y-18*u+bob;
+            // Ground shadow
+            p.setColor(Color.argb(85,0,0,0));
+            c.drawOval(x-10*u,y+19*u,x+10*u,y+23*u,p);
+            // Legs and shoes, slightly separated for a natural human silhouette
+            p.setShader(new LinearGradient(x-5*u,top+18*u,x+5*u,y+19*u,new int[]{Color.rgb(39,48,68),Color.rgb(13,19,31)},null,Shader.TileMode.CLAMP));
+            Path legs=new Path();
+            legs.moveTo(x-5*u,top+17*u);legs.lineTo(x+5*u,top+17*u);
+            legs.lineTo(x+4.7f*u,y+17*u);legs.lineTo(x+1.2f*u,y+18*u);
+            legs.lineTo(x-.7f*u,top+24*u);legs.lineTo(x-2.5f*u,y+17*u);
+            legs.lineTo(x-7*u,y+17*u);legs.close();c.drawPath(legs,p);p.setShader(null);
+            rect(x-8*u,y+16*u,x-1*u,y+20*u,2*u,Color.rgb(8,12,21));
+            rect(x+1*u,y+16*u,x+8*u,y+20*u,2*u,Color.rgb(8,12,21));
+            // Neck
+            rect(x-2.2f*u,top+4*u,x+2.2f*u,top+9*u,1.5f*u,Color.rgb(202,157,130));
+            // Arms behind the jacket
+            p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(4.1f*u);
+            p.setColor(Color.rgb(181,131,108));
+            c.drawLine(x-5*u,top+9*u,x-8.4f*u,top+17*u,p);
+            c.drawLine(x+5*u,top+9*u,x+8.4f*u,top+17*u,p);
+            // Human torso / jacket silhouette
+            Path torso=new Path();
+            torso.moveTo(x-3.8f*u,top+7*u);torso.lineTo(x-6*u,top+8.5f*u);
+            torso.lineTo(x-5.8f*u,top+16*u);torso.lineTo(x-3.3f*u,top+17*u);
+            torso.lineTo(x+3.3f*u,top+17*u);torso.lineTo(x+5.8f*u,top+16*u);
+            torso.lineTo(x+6*u,top+8.5f*u);torso.lineTo(x+3.8f*u,top+7*u);torso.close();
+            p.setShader(new LinearGradient(x-6*u,top+7*u,x+6*u,top+17*u,new int[]{brighten(color),color,Color.rgb(17,26,42)},null,Shader.TileMode.CLAMP));
+            c.drawPath(torso,p);p.setShader(null);
+            // Collar, center zip and jacket panels
+            p.setColor(Color.argb(210,235,244,255));
+            Path collar=new Path();collar.moveTo(x-3.5f*u,top+7.4f*u);collar.lineTo(x,top+10*u);collar.lineTo(x-1.1f*u,top+11.5f*u);collar.close();c.drawPath(collar,p);
+            Path collar2=new Path();collar2.moveTo(x+3.5f*u,top+7.4f*u);collar2.lineTo(x,top+10*u);collar2.lineTo(x+1.1f*u,top+11.5f*u);collar2.close();c.drawPath(collar2,p);
+            p.setColor(Color.argb(190,9,18,31));p.setStrokeWidth(.9f*u);c.drawLine(x,top+10*u,x,top+16.3f*u,p);
+            p.setColor(Color.argb(150,255,255,255));p.setStrokeWidth(.65f*u);
+            c.drawLine(x-4.2f*u,top+10*u,x-3.7f*u,top+15.5f*u,p);
+            c.drawLine(x+4.2f*u,top+10*u,x+3.7f*u,top+15.5f*u,p);
+            // Fabric microtexture: short woven strokes on both jacket panels
+            for(int i=0;i<5;i++){
+                float yy=top+(10.5f+i*1.1f)*u;
+                p.setColor(Color.argb(35,255,255,255));
+                c.drawLine(x-4.4f*u,yy,x-2.5f*u,yy+.55f*u,p);
+                c.drawLine(x+2.5f*u,yy+.55f*u,x+4.4f*u,yy,p);
+            }
+            // Shoulder patch with player color
+            rect(x-4.8f*u,top+9*u,x-3.2f*u,top+11*u,1*u,brighten(color));
+            // Face, ears, hair and fringe
+            p.setColor(Color.rgb(215,174,147));c.drawCircle(x,top+1.2f*u,headR,p);
+            p.setColor(Color.rgb(192,142,116));c.drawCircle(x-headR*.92f,top+1.5f*u,1.2f*u,p);c.drawCircle(x+headR*.92f,top+1.5f*u,1.2f*u,p);
+            p.setShader(new LinearGradient(x-headR,top-headR,x+headR,top+2*u,new int[]{Color.rgb(43,34,38),Color.rgb(14,19,30)},null,Shader.TileMode.CLAMP));
+            Path hair=new Path();hair.moveTo(x-headR,top+1.5f*u);hair.quadTo(x-headR*1.15f,top-headR*1.15f,x,top-headR*.95f);hair.quadTo(x+headR*1.1f,top-headR*.9f,x+headR,top+1*u);hair.lineTo(x+headR*.25f,top+.1f*u);hair.lineTo(x-.35f*u,top+1.1f*u);hair.lineTo(x-headR,top+1.5f*u);hair.close();c.drawPath(hair,p);p.setShader(null);
+            // Eyes and small face shading
+            p.setColor(Color.rgb(35,31,35));c.drawCircle(x-2*u,top+1.8f*u,.55f*u,p);c.drawCircle(x+2*u,top+1.8f*u,.55f*u,p);
+            p.setColor(Color.argb(120,255,235,215));c.drawLine(x-.8f*u,top+4*u,x+.8f*u,top+4*u,p);
+            // Subtle rim light and a thin player-color aura
+            if(active){
+                p.setColor(Color.argb(45,Color.red(color),Color.green(color),Color.blue(color)));
+                c.drawCircle(x,y,24*u,p);
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.2f*u);p.setColor(Color.argb(175,Color.red(color),Color.green(color),Color.blue(color)));
+                c.drawRoundRect(x-8*u,top-7*u,x+8*u,y+21*u,7*u,7*u,p);p.setStyle(Paint.Style.FILL);
+            }
         }
         int brighten(int color){return Color.rgb(Math.min(255,Color.red(color)+35),Math.min(255,Color.green(color)+35),Math.min(255,Color.blue(color)+35));}
         void drawPlatform(float x,float y,float w,float h,boolean ignored){drawPlatform(x,y,w,h);}
