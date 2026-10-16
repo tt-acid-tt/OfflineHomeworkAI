@@ -150,20 +150,19 @@ public class ThreeDGameView extends GLSurfaceView {
                     center(c,"Ждём, пока создатель комнаты начнёт игру…",w*.5f,h*.77f,18,Color.WHITE,false);
                 }
                 fill(c,w*.09f,h*.77f,w*.27f,h*.86f,14,Color.argb(180,33,49,70));center(c,"НАЗАД",w*.18f,h*.825f,18,Color.WHITE,true);
+            } else if(g.screen==3) {
+                p.setShader(new LinearGradient(0,0,w,h,new int[]{Color.argb(25,0,0,0),Color.argb(190,0,0,0),Color.argb(235,0,0,0)},null,Shader.TileMode.CLAMP));
+                c.drawRect(0,0,w,h,p);p.setShader(null);
+                fill(c,w*.06f,h*.68f,w*.72f,h*.93f,18,Color.argb(175,7,12,10));
+                text(c,"FLIGHT 417  /  EMERGENCY",w*.09f,h*.74f,Math.min(15,w*.02f),Color.rgb(215,174,119),true);
+                String line=g.sceneTime<2.0f?"СИСТЕМНАЯ ОШИБКА…":g.sceneTime<4.2f?"УДАР! ДЕРЖИСЬ!":g.sceneTime<6.2f?"КАБИНА РАЗРУШАЕТСЯ…":"ТЫ ОЧНУЛСЯ НА НЕИЗВЕСТНОМ ОСТРОВЕ";
+                text(c,line,w*.09f,h*.81f,Math.min(20,w*.027f),Color.rgb(237,237,224),true);
+                text(c,"Нажми в любом месте, чтобы пропустить",w*.09f,h*.88f,Math.min(13,w*.017f),Color.rgb(185,185,174),false);
             } else {
-                // In-game overlay is intentionally sparse: world stays full-bleed.
-                fill(c,18,16,Math.min(w*.64f,590),145,15,Color.argb(220,5,13,27));
-                text(c,"DUALITY  /  КОМНАТА "+(Math.min(g.stage+1,4))+" ИЗ 4",34,42,17,Color.WHITE,true);
-                String objective=g.stage==0?"СИГНАЛЬНЫЙ КОД":g.stage==1?"ЗЕРКАЛЬНЫЙ ШИФР":g.stage==2?"СХЕМА ПИТАНИЯ":"ПОСЛЕДОВАТЕЛЬНОСТЬ АВАРИИ";
-                text(c,objective,34,66,Math.min(14,w*.018f),Color.rgb(109,255,221),true);
-                String clue="";
-                if(g.stage==0) clue=g.lan.hosting||g.solo?"КАНАЛ A: 4 импульса. Узнай B и введи БОЛЬШЕЕ из двух.":"КАНАЛ B: 2 импульса. Узнай A и введи МЕНЬШЕЕ из двух.";
-                else if(g.stage==1) clue=g.lan.hosting||g.solo?"ШИФР: символ B — ←. Отрази его по вертикали; таблица ↑1 →2 ↓3 ←4.":"ТВОЙ ДИСК: ←. Передай символ партнёру; введи номер своего символа по таблице ↑1 →2 ↓3 ←4.";
-                else if(g.stage==2) clue=g.lan.hosting||g.solo?"СХЕМА A: 3 линии горят. Уточни у B контрольный канал; введи число линий, если он нечётный.":"СХЕМА B: контрольный канал №1. Скажи A номер канала и введи номер активного канала.";
-                else if(g.stage==3) clue=g.lan.hosting||g.solo?"ЖУРНАЛ: 1, 3, 2, 4. Передай порядок B; отсортируй по возрастанию и введи последнее число.":"ПРИОРИТЕТ: после сортировки введи второй элемент. Попроси A продиктовать порядок из журнала.";
-                text(c,clue,34,92,Math.min(12,w*.016f),Color.rgb(225,235,250),true);
-                text(c,"Обсудите подсказки голосом. Консоли находятся по разным сторонам комнаты.",34,116,Math.min(11,w*.014f),Color.rgb(163,188,216),false);
-                if(!g.solo && !g.lan.connected){fill(c,w*.36f,16,w*.64f,53,12,Color.argb(210,80,30,39));center(c,"СВЯЗЬ ПОТЕРЯНА",w*.5f,39,13,Color.WHITE,true);}
+                fill(c,18,16,Math.min(w*.47f,460),105,14,Color.argb(190,9,15,11));
+                text(c,"AFTERMATH  /  DAY 01",34,42,17,Color.rgb(230,231,210),true);
+                text(c,"ЦЕЛЬ: ОСМОТРИ ОБЛОМКИ САМОЛЁТА",34,68,Math.min(14,w*.018f),Color.rgb(210,174,119),true);
+                text(c,"СОБИРАЙ РЕСУРСЫ • ИЩИ УКРЫТИЕ • НЕ ШУМИ",34,91,Math.min(11,w*.014f),Color.rgb(183,195,173),false);
                 // Left movement stick.
                 float bx=Math.min(112,w*.12f),by=h-100;
                 p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(72,185,215,245));c.drawCircle(bx,by,62,p);
@@ -171,20 +170,8 @@ public class ThreeDGameView extends GLSurfaceView {
                 p.setColor(Color.argb(235,214,236,255));c.drawCircle(bx+g.stickX*32,by+g.stickY*32,23,p);
                 center(c,"ДВИЖЕНИЕ",bx,by+88,11,Color.argb(220,220,235,250),true);
                 // Look zone hint, no extra directional buttons.
-                center(c,"ПРОВЕДИ ПАЛЬЦЕМ — ПОВОРОТ КАМЕРЫ",w*.69f,h-20,Math.min(13,w*.016f),Color.argb(185,225,236,250),true);
-                if(g.nearInteract){
-                    fill(c,w-340,h-144,w-274,h-58,15,Color.argb(225,25,44,66));center(c,"◀",w-307,h-91,25,Color.WHITE,true);
-                    fill(c,w-270,h-144,w-204,h-58,15,Color.argb(225,25,44,66));center(c,"▶",w-237,h-91,25,Color.WHITE,true);
-                    fill(c,w-198,h-144,w-22,h-58,15,g.confirmed?Color.rgb(255,190,75):Color.rgb(70,255,214));
-                    center(c,g.confirmed?"ОЖИДАНИЕ...":"ЗАФИКСИРОВАТЬ",w-110,h-112,Math.min(14,w*.018f),Color.rgb(4,20,31),true);
-                    center(c,"КОД: "+new String[]{"1  △","2  ○","3  ◇","4  ☾"}[g.choiceIndex],w-110,h-82,18,Color.rgb(4,20,31),true);
-                }
-                if(g.stage>=4){
-                    fill(c,w*.30f,h*.25f,w*.70f,h*.70f,26,Color.argb(235,6,17,31));
-                    center(c,"КОМПЛЕКС ПРОЙДЕН",w*.5f,h*.40f,Math.min(30,w*.04f),Color.rgb(70,255,214),true);
-                    center(c,"Четыре комнаты. Четыре разных шифра.",w*.5f,h*.49f,Math.min(17,w*.023f),Color.WHITE,false);
-                    fill(c,w*.40f,h*.56f,w*.60f,h*.65f,15,Color.rgb(70,255,214));center(c,"В МЕНЮ",w*.5f,h*.615f,17,Color.rgb(4,20,31),true);
-                }
+                center(c,"СВАЙП — СМОТРЕТЬ • СТИК — ИДТИ",w*.69f,h-20,Math.min(13,w*.016f),Color.argb(185,225,236,250),true);
+                if(g.nearInteract){ fill(c,w-208,h-112,w-22,h-48,16,Color.rgb(178,112,61));center(c,"E  ОСМОТРЕТЬ",w-115,h-72,Math.min(16,w*.02f),Color.rgb(20,18,12),true); }
             }
             postInvalidateDelayed(50);
         }
@@ -219,11 +206,9 @@ public class ThreeDGameView extends GLSurfaceView {
             }
             switch(e.getActionMasked()){
                 case MotionEvent.ACTION_DOWN: {
+                    if(g.screen==3){g.screen=2;g.sceneTime=8.6f;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;g.hud.invalidate();return true;}
                     int id=e.getPointerId(0); lastX=x;lastY=y;
-                    if(g.nearInteract&&y>h-160&&x>w-205&&x<w-20){g.interact();return true;}
-                    if(g.nearInteract&&y>h-160&&x>w-340&&x<=w-270){g.selectPrevious();return true;}
-                    if(g.nearInteract&&y>h-160&&x>w-270&&x<=w-205){g.selectNext();return true;}
-                    if(g.stage>=4&&x>w*.40f&&x<w*.60f&&y>h*.52f&&y<h*.70f){g.backToMenu();return true;}
+                    if(g.nearInteract&&y>h-140&&x>w-220){g.moves++;g.notice="Ты осмотрел место крушения.";g.nearInteract=false;g.hud.invalidate();return true;}
                     if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
                     else {look=true;lookPointer=id;}
                     return true;
