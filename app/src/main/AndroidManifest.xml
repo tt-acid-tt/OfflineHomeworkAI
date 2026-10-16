@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <application
         android:allowBackup="false"
-        android:label="DUALITY"
+        android:label="AFTERMATH: ISLAND SURVIVAL"
         android:icon="@drawable/ic_duality"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="true"
