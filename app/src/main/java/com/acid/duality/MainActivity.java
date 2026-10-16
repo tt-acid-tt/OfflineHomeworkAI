@@ -339,7 +339,7 @@ public class MainActivity extends Activity {
             switch(id){
                 case "play":screen=1;break;
                 case "settings":showSettings=true;break;
-                case "how":new AlertDialog.Builder(MainActivity.this).setTitle("Как играть").setMessage("Красный и синий игроки видят разные подсказки. Обменивайтесь информацией, двигайтесь кнопками и нажимайте ДЕЙСТВИЕ у механизмов. Пройдите шесть комнат вместе.").setPositiveButton("ПОНЯТНО",null).show();break;
+                case "how":showPopup("КАК ИГРАТЬ","Красный и синий игроки видят разные подсказки. Обменивайтесь информацией, двигайтесь кнопками и нажимайте ДЕЙСТВИЕ у механизмов. Пройдите шесть комнат вместе.",new String[]{"ПОНЯТНО"},()->{});break;
                 case "back":if(screen==2){closeNetwork();screen=1;}else screen=0;break;
                 case "wifi":mode=0;showLobbyChoice();break;
                 case "bt":mode=1;showLobbyChoice();break;
@@ -351,7 +351,7 @@ public class MainActivity extends Activity {
                 case "up":py=Math.max(.05f,py-.06f);moves++;sendState();break;
                 case "down":py=Math.min(.95f,py+.06f);moves++;sendState();break;
                 case "action":doAction();break;
-                case "exit":new AlertDialog.Builder(MainActivity.this).setTitle("Покинуть комнату?").setMessage("Прогресс текущей сессии будет остановлен.").setNegativeButton("ОСТАТЬСЯ",null).setPositiveButton("ВЫЙТИ",(d,v)->{closeNetwork();screen=0;}).show();break;
+                case "exit":showPopup("ПОКИНУТЬ КОМНАТУ?","Прогресс текущей сессии будет остановлен.",new String[]{"ОСТАТЬСЯ","ВЫЙТИ"},()->{},()->{closeNetwork();screen=0;});break;
             }
             invalidate();
         }
@@ -365,7 +365,7 @@ public class MainActivity extends Activity {
             if(mode==0){
                 netThread=new Thread(()->{try{server=new ServerSocket(47822);startLobbyBeacon();Socket s=server.accept();stopLobbyBeacon();socket=s;setupStreams(s);connected=true;status="ИГРОК ПОДКЛЮЧИЛСЯ";send("WELCOME");handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось создать лобби. Проверьте Wi-Fi и повторите попытку.";stopLobbyBeacon();postInvalidate();}});netThread.start();
             }else{
-                if(bt==null){toast("На устройстве нет Bluetooth");return;}
+                if(bt==null){showPopup("BLUETOOTH НЕДОСТУПЕН","На этом устройстве нет Bluetooth.",new String[]{"ПОНЯТНО"},()->{});return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},401);return;}
                 netThread=new Thread(()->{try{btServer=bt.listenUsingRfcommWithServiceRecord("DUALITY",BT_UUID);btSocket=btServer.accept();connected=true;setupStreams(new BluetoothStreamSocket(btSocket));status="ИГРОК ПОДКЛЮЧИЛСЯ";runReader();}catch(Exception ex){status="Bluetooth: "+ex.getMessage();postInvalidate();}});netThread.start();
             }
@@ -377,8 +377,18 @@ public class MainActivity extends Activity {
             }else{
                 if(bt==null){toast("На устройстве нет Bluetooth");return;}
                 if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},402);return;}
-                try{Set<BluetoothDevice> devices=bt.getBondedDevices();if(devices.isEmpty()){new AlertDialog.Builder(MainActivity.this).setTitle("Телефоны ещё не сопряжены").setMessage("Сопряжение — это разовое подтверждение связи между телефонами. Откройте настройки → Bluetooth на обоих устройствах, включите Bluetooth, выберите второй телефон и подтвердите одинаковый код. Затем вернитесь в игру и снова нажмите «Найти доступные лобби».").setPositiveButton("ПОНЯТНО",null).show();return;}ArrayList<BluetoothDevice> list=new ArrayList<>(devices);String[] names=new String[list.size()];for(int i=0;i<list.size();i++)names[i]=list.get(i).getName()+"\n"+list.get(i).getAddress();new AlertDialog.Builder(MainActivity.this).setTitle("Выберите телефон рядом").setMessage("Показываются телефоны, уже сопряжённые в системных настройках Bluetooth.").setItems(names,(d,which)->{host=false;screen=2;netThread=new Thread(()->{try{BluetoothSocket bs=list.get(which).createRfcommSocketToServiceRecord(BT_UUID);bs.connect();btSocket=bs;setupStreams(new BluetoothStreamSocket(bs));connected=true;send("JOIN");status="СОЕДИНЕНО";runReader();}catch(Exception ex){status="Не удалось подключиться по Bluetooth";postInvalidate();}});netThread.start();invalidate();}).show();}catch(Exception ex){toast("Разрешите доступ к Bluetooth");}
+                try{Set<BluetoothDevice> devices=bt.getBondedDevices();if(devices.isEmpty()){showPopup("ТЕЛЕФОНЫ НЕ СОПРЯЖЕНЫ","Откройте настройки Android → Bluetooth на обоих телефонах, включите Bluetooth, выберите второй телефон и подтвердите код. Затем вернитесь в игру и повторите поиск.",new String[]{"ПОНЯТНО"},()->{});return;}ArrayList<BluetoothDevice> list=new ArrayList<>(devices);String[] names=new String[list.size()];for(int i=0;i<list.size();i++)names[i]=list.get(i).getName()+"\n"+list.get(i).getAddress();showBluetoothList(names,list);}catch(Exception ex){toast("Разрешите доступ к Bluetooth");}
             }
+        }
+        void showBluetoothList(String[] names,ArrayList<BluetoothDevice> list){
+            Runnable[] actions=new Runnable[list.size()+1];String[] opts=new String[names.length+1];
+            for(int i=0;i<names.length;i++){opts[i]=names[i].replace("\n"," • ");final int ix=i;actions[i]=()->{
+                host=false;screen=2;connected=false;status="ПОДКЛЮЧЕНИЕ ПО BLUETOOTH…";invalidate();
+                netThread=new Thread(()->{try{BluetoothSocket bs=list.get(ix).createRfcommSocketToServiceRecord(BT_UUID);bs.connect();btSocket=bs;setupStreams(new BluetoothStreamSocket(bs));connected=true;send("JOIN");status="СОЕДИНЕНО";handler.post(()->invalidate());runReader();}catch(Exception ex){status="Не удалось подключиться по Bluetooth";handler.post(()->showPopup("СБОЙ BLUETOOTH","Проверьте, что второй телефон открыл лобби и устройства сопряжены.",new String[]{"ПОНЯТНО"},()->{}));postInvalidate();}});
+                netThread.start();
+            };}
+            opts[names.length]="ОТМЕНА";actions[names.length]=()->{};
+            showPopup("ВЫБЕРИТЕ ТЕЛЕФОН","Выберите телефон, уже сопряжённый в настройках Bluetooth.",opts,actions);
         }
         void startLobbyBeacon(){
             stopLobbyBeacon();discoveryRunning=true;
@@ -458,7 +468,7 @@ public class MainActivity extends Activity {
         }
         void doAction(){
             if(room==0){progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
-            else if(room==1){new AlertDialog.Builder(MainActivity.this).setTitle("ПАНЕЛЬ ДОСТУПА").setMessage("Подсказка на стене: 4 — 1 — 7").setView(new EditText(MainActivity.this)).setNegativeButton("ОТМЕНА",null).setPositiveButton("ВВЕСТИ",(d,v)->{doorOpen=true;send("DOOR");invalidate();}).show();return;}
+            else if(room==1){showPopup("ПАНЕЛЬ ДОСТУПА","На стене подсказка: 4 — 1 — 7. Нажмите «ОТКРЫТЬ», чтобы проверить код.",new String[]{"ОТМЕНА","ОТКРЫТЬ"},()->{},()->{doorOpen=true;send("DOOR");invalidate();});return;}
             else if(room==2){pathHint=!pathHint;progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
             else {progress++;if(progress>=2){doorOpen=true;send("DOOR");}}
             if(doorOpen){room=Math.min(rooms.length-1,room+1);progress=0;doorOpen=false;send("ROOM,"+room);if(room==rooms.length-1)toast("Финальная комната — найдите общий выход!");}
