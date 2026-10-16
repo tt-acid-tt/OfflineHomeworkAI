@@ -50,8 +50,18 @@ public class MainActivity extends Activity {
         void center(String s,float x,float y,float size,int color,boolean bold){p.setTextSize(size);p.setTypeface(bold?Typeface.create("sans-serif",1):Typeface.create("sans-serif",0));p.setColor(color);p.setStyle(Paint.Style.FILL);c.drawText(s,x-p.measureText(s)/2,y,p);}
         void button(String id,String label,float x,float y,float w,float h,int accent,boolean filled){
             RectF r=new RectF(x,y,x+w,y+h); buttons.put(id,r);
-            rect(x,y,x+w,y+h,17,filled?accent:Color.rgb(23,32,52));
-            stroke(x,y,x+w,y+h,17,accent,filled?0:2);
+            p.setShadowLayer(filled?15:8,0,4,Color.argb(filled?85:45,Color.red(accent),Color.green(accent),Color.blue(accent)));
+            if(filled){
+                p.setStyle(Paint.Style.FILL);
+                p.setShader(new LinearGradient(x,y,x+w,y+h,brighten(accent),accent,Shader.TileMode.CLAMP));
+                c.drawRoundRect(x,y,x+w,y+h,17,17,p);
+                p.setShader(null);p.clearShadowLayer();
+                rect(x+4,y+3,x+w-4,y+Math.max(5,h*.12f),4,Color.argb(48,255,255,255));
+            }else{
+                p.setShader(new LinearGradient(x,y,x+w,y+h,Color.rgb(32,46,70),Color.rgb(16,24,41),Shader.TileMode.CLAMP));
+                c.drawRoundRect(x,y,x+w,y+h,17,17,p);p.setShader(null);p.clearShadowLayer();
+                stroke(x,y,x+w,y+h,17,Color.argb(220,Color.red(accent),Color.green(accent),Color.blue(accent)),2);
+            }
             center(label,x+w/2,y+h/2+6,Math.min(19,h*.29f),filled?BG:WHITE,true);
         }
         @Override protected void onDraw(Canvas canvas){
@@ -121,7 +131,7 @@ public class MainActivity extends Activity {
         void drawGame(float w,float h){
             text("DUALITY  /  "+(room+1)+" OF "+rooms.length,w*.04f,h*.07f,14,MUTED,true);
             text(rooms[Math.min(room,rooms.length-1)],w*.04f,h*.13f,Math.min(25,w*.035f),WHITE,true);
-            drawRoom(w*.06f,h*.20f,w*.94f,h*.85f);
+            drawRoom(0,h*.15f,w,h);
             float gx=w*.055f,gy=h*.69f,sz=Math.min(w*.065f,h*.13f);
             button("left","←",gx,gy,sz,sz,BLUE,false);
             button("up","↑",gx+sz+6,gy-sz-5,sz,sz,BLUE,false);
@@ -167,15 +177,19 @@ public class MainActivity extends Activity {
         void drawCharacter(float x,float y,int color,float bob,boolean active){
             float s=Math.max(1,getWidth()/1000f), r=14*s;
             p.setColor(Color.argb(70,0,0,0));c.drawOval(x-r*1.2f,y+r*1.6f,x+r*1.2f,y+r*2.1f,p);
-            // legs
-            rect(x-r*.65f,y+r*.55f+bob,x-r*.12f,y+r*1.45f+bob,4*s,Color.rgb(28,35,50));
-            rect(x+r*.12f,y+r*.55f+bob,x+r*.65f,y+r*1.45f+bob,4*s,Color.rgb(28,35,50));
-            // body with gradient
-            p.setShader(new LinearGradient(x-r,y-r*.25f,x+r,y+r,brighten(color),color,Shader.TileMode.CLAMP));
+            // Boots, arms and glossy highlights give both mascots a more polished silhouette.
+            rect(x-r*.66f,y+r*.52f+bob,x-r*.12f,y+r*1.42f+bob,4*s,Color.rgb(22,29,44));
+            rect(x+r*.12f,y+r*.52f+bob,x+r*.66f,y+r*1.42f+bob,4*s,Color.rgb(22,29,44));
+            p.setShader(new LinearGradient(x-r*1.2f,y-r*.1f,x+r*1.2f,y+r*.9f,brighten(color),color,Shader.TileMode.CLAMP));
+            c.drawRoundRect(x-r*1.18f,y-r*.27f+bob,x-r*.72f,y+r*.52f+bob,r*.22f,r*.22f,p);
+            c.drawRoundRect(x+r*.72f,y-r*.27f+bob,x+r*1.18f,y+r*.52f+bob,r*.22f,r*.22f,p);
             c.drawRoundRect(x-r,y-r*.45f+bob,x+r,y+r*.8f+bob,r*.55f,r*.55f,p);p.setShader(null);
-            p.setColor(color);c.drawCircle(x,y-r*.75f+bob,r*.72f,p);
-            p.setColor(Color.rgb(230,245,255));c.drawOval(x-r*.42f,y-r*.88f+bob,x-r*.04f,y-r*.58f+bob,p);c.drawOval(x+r*.05f,y-r*.88f+bob,x+r*.43f,y-r*.58f+bob,p);
-            p.setColor(Color.rgb(13,21,35));c.drawCircle(x-r*.22f,y-r*.73f+bob,r*.12f,p);c.drawCircle(x+r*.24f,y-r*.73f+bob,r*.12f,p);
+            p.setShader(new LinearGradient(x-r*.6f,y-r*.35f,x+r*.25f,y+r*.55f,Color.argb(120,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP));
+            c.drawRoundRect(x-r*.68f,y-r*.28f+bob,x-r*.05f,y+r*.45f+bob,r*.25f,r*.25f,p);p.setShader(null);
+            p.setColor(brighten(color));c.drawCircle(x,y-r*.75f+bob,r*.76f,p);
+            p.setColor(Color.rgb(238,248,255));c.drawOval(x-r*.44f,y-r*.90f+bob,x-r*.04f,y-r*.55f+bob,p);c.drawOval(x+r*.05f,y-r*.90f+bob,x+r*.45f,y-r*.55f+bob,p);
+            p.setColor(Color.rgb(13,21,35));c.drawCircle(x-r*.22f,y-r*.72f+bob,r*.13f,p);c.drawCircle(x+r*.24f,y-r*.72f+bob,r*.13f,p);
+            p.setColor(Color.argb(150,255,255,255));c.drawCircle(x-r*.32f,y-r*.96f+bob,r*.09f,p);
             if(active){p.setColor(Color.argb(90, color==RED?255:80,color==BLUE?170:90,255));c.drawCircle(x,y,r*1.55f,p);p.setColor(color);c.drawCircle(x,y,r*1.55f,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);c.drawCircle(x,y,r*1.55f,p);p.setStyle(Paint.Style.FILL);}
         }
         int brighten(int color){return Color.rgb(Math.min(255,Color.red(color)+35),Math.min(255,Color.green(color)+35),Math.min(255,Color.blue(color)+35));}
