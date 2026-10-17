@@ -444,10 +444,17 @@ func _refresh_panels() -> void:
             var button := Button.new()
             button.text = "%s    •    %d дерева / %d металла" % [PLAN_NAMES[i], WOOD_COST[i], METAL_COST[i]]
             button.custom_minimum_size = Vector2(460, 40)
-            button.pressed.connect(func(): selected_plan = i; placing = true; book_open = false; _refresh_panels(); _set_status("Чертёж выбран: %s. Нажми «ПОСТАВИТЬ»." % PLAN_NAMES[i]);)
+            button.pressed.connect(_select_plan.bind(i))
             col2.add_child(button)
         _make_button(col2, "ЗАКРЫТЬ", _toggle_book)
         _make_button(col2, "ПОСТАВИТЬ ЧЕРТЁЖ", _place_blueprint)
+
+func _select_plan(idx: int) -> void:
+    selected_plan = idx
+    placing = true
+    book_open = false
+    _refresh_panels()
+    _set_status("Чертёж выбран: %s. Нажми «ПОСТАВИТЬ»." % PLAN_NAMES[idx])
 
 func _start_intro() -> void:
     intro_overlay = ColorRect.new()
@@ -476,6 +483,10 @@ func _start_intro() -> void:
     skip.pressed.connect(_finish_intro)
     stack.add_child(skip)
 
+func _remove_intro_overlay() -> void:
+    if is_instance_valid(intro_overlay):
+        intro_overlay.queue_free()
+
 func _finish_intro() -> void:
     if not intro_active:
         return
@@ -483,7 +494,7 @@ func _finish_intro() -> void:
     if intro_overlay:
         var tween := create_tween()
         tween.tween_property(intro_overlay, "modulate:a", 0.0, 1.0)
-        tween.tween_callback(func(): if is_instance_valid(intro_overlay): intro_overlay.queue_free())
+        tween.tween_callback(_remove_intro_overlay)
     _set_status("Ты выбрался из самолёта. Обыщи чемоданы и собери материалы.")
 
 func _update_nearby() -> void:
@@ -546,7 +557,7 @@ func _interact() -> void:
         var tween := create_tween()
         tween.tween_property(tree, "rotation:z", 1.42, 0.85).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
         tween.parallel().tween_property(tree, "position:y", -0.35, 0.85)
-        tween.tween_callback(func(): if is_instance_valid(tree): tree.queue_free())
+        tween.tween_callback(_remove_tree.bind(tree))
         wood += 3
         _set_status("Дерево упало. Получено 3 древесины.")
         _refresh_panels()
@@ -564,6 +575,10 @@ func _interact() -> void:
         _build_structure(idx, plan.position)
         _set_status("Постройка готова: %s." % PLAN_NAMES[idx])
         _refresh_panels()
+
+func _remove_tree(tree: Node3D) -> void:
+    if is_instance_valid(tree):
+        tree.queue_free()
 
 func _toggle_book() -> void:
     book_open = not book_open
