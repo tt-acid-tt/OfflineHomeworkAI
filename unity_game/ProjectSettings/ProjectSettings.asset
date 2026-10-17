@@ -8,22 +8,20 @@ PlayerSettings:
   AndroidProfiler: 0
   defaultScreenOrientation: 1
   companyName: Acid Studio
-  productName: AFTERMATH
-  bundleVersion: 0.1
-  AndroidBundleVersionCode: 1
+  productName: DUALITY
+  bundleVersion: 0.2
+  AndroidBundleVersionCode: 2
   AndroidMinSdkVersion: 23
   AndroidTargetSdkVersion: 35
   applicationIdentifier:
-    Android: com.acid.aftermath
+    Android: com.acid.duality
   scriptingBackend:
     Android: 1
   AndroidTargetArchitectures: 1
-  apiCompatibilityLevelPerPlatform:
-    Android: 6
-  m_ActiveColorSpace: 0
+  apiCompatibilityLevelPerPlatform: 6
+  activeColorSpace: 0
   usePlayerLog: 1
   defaultIsNativeResolution: 1
-  resizableWindow: 1
   runInBackground: 1
   muteOtherAudioSources: 0
   allowUnsafeCode: 0
@@ -34,6 +32,6 @@ PlayerSettings:
   AndroidUseCustomKeystore: 0
   AndroidTVCompatibility: 0
   AndroidIsGame: 1
-  AndroidBuildApkPerCpuArchitecture: 0
+  AndroidInternetAccess: 2
+  resizableWindow: 1
   scriptingRuntimeVersion: 1
-  activeInputHandler: 0

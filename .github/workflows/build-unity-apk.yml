@@ -1,37 +1,56 @@
-name: Build AFTERMATH Unity Android APK
+name: Build DUALITY Unity Android APK
 on:
-  workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'unity_game/**'
       - '.github/workflows/build-unity-apk.yml'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: Build Unity 6 Android APK
+    name: Build DUALITY Android APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
-      - name: Build Android APK
+
+      - name: Check Unity license configuration
+        env:
+          UNITY_LICENSE: \${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: \${{ secrets.UNITY_SERIAL }}
+        run: |
+          if [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; then
+            echo "::error::Unity license is not configured. Add UNITY_LICENSE (recommended) or UNITY_SERIAL in Settings > Secrets and variables > Actions. Unity Personal activation requires a license file."
+            exit 1
+          fi
+
+      - name: Build Android APK with Unity 6
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: \${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: \${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: \${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: \${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: unity_game
           unityVersion: 6000.0.40f1
           targetPlatform: Android
           buildsPath: build
-          buildName: AFTERMATH.apk
+          buildName: DUALITY.apk
           androidAppBundle: false
           allowDirtyBuild: true
-      - name: Upload APK artifact
+
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: AFTERMATH-UNITY-APK
-          path: build/Android/AFTERMATH.apk
+          name: DUALITY-APK
+          path: build/Android/DUALITY.apk
           if-no-files-found: error
           retention-days: 14

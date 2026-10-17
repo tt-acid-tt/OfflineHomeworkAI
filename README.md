@@ -1,27 +1,23 @@
-# DUALITY — кооперативная головоломка для Android
+# DUALITY: Escape Together
 
-**DUALITY** — горизонтальная игра на двоих: красный и синий персонажи проходят комнаты, обмениваются подсказками и вместе открывают двери.
+Unity 6 mobile 3D co-op puzzle prototype for two players.
 
-## Что сейчас заложено в проект
-- Тёмное меню с анимированными красным и синим персонажами.
-- Горизонтальный интерфейс и лёгкая 3D-стилизация комнат без тяжёлых графических ресурсов.
-- Шесть комнат с кодами, плитами, переключателями и мостом с асимметричной подсказкой.
-- Экран лобби с выбором роли хоста/подключающегося игрока.
-- Соединение по локальной Wi-Fi сети (TCP, порт 47822) и Bluetooth Classic для уже сопряжённых устройств.
-- Автоматическая сборка debug APK через GitHub Actions.
+## Gameplay
+- First-person 3D rooms with metallic surfaces, accent lighting, emissive surfaces, and a sci-fi puzzle console.
+- Three chambers. Enter the sequence 2 -> 4 -> 1, then both players must stand on different coloured pressure plates to open the bulkhead.
+- Red host and blue joining player.
+- Local Wi-Fi UDP lobby on port 47822. Both phones must be on the same Wi-Fi network. The host creates a lobby; the second phone enters the host phone's local IPv4 address.
+- Touch controls on mobile; WASD, mouse look and E on desktop.
 
-## Как получить APK на телефоне
-1. Открой вкладку **Actions** в репозитории.
-2. Выбери последний запуск **Build DUALITY APK**.
-3. Когда запуск станет зелёным, внизу страницы открой **Artifacts → DUALITY-APK**.
-4. Скачай ZIP, распакуй его и установи app-debug.apk. Если Android спросит разрешение на установку из этого источника, разреши его.
+## Android APK build
+The repository contains a Unity 6 project and GitHub Actions workflow. On every project push, Actions attempts to build an APK and upload it as the DUALITY-APK artifact.
 
-## Как подключиться
-### Wi-Fi
-Оба телефона должны быть в одной Wi-Fi сети. Хост нажимает «Создать лобби» и показывает свой IP второму игроку. Второй игрок выбирает «Подключиться к лобби» и вводит этот IP. Порт игры — 47822; сеть должна разрешать локальные подключения.
+Unity licensing is required by Unity's build tools. The previous Actions failure was specifically "Missing Unity License File and no Serial was found"; it was not a source compilation error. To allow CI to build, configure a Unity Personal license file as repository secret UNITY_LICENSE (recommended), or configure the Unity serial/credentials secrets supported by GameCI. Do not commit a license file or password into this repository.
 
-### Bluetooth
-Сначала сопрягите телефоны в системных настройках Bluetooth. На одном устройстве создайте лобби, на другом выберите сопряжённое устройство в списке.
+1. Open repository Settings -> Secrets and variables -> Actions.
+2. Add UNITY_LICENSE using your Unity Personal license activation file contents.
+3. Open Actions -> Build DUALITY Unity Android APK -> Run workflow (or push a change).
+4. Download DUALITY-APK from a successful run and install the APK on Android.
 
-## Важно
-Это первая играбельная сборка-прототип. Визуал комнат сделан лёгкой отрисовкой в перспективе, а не полноценным 3D-движком; сетевую синхронизацию и совместное прохождение нужно проверить на двух реальных устройствах. Пока APK не собрался успешно в Actions, готовым файлом он не считается.
+## Notes
+This is an early playable foundation, not a finished commercial game. Test local Wi-Fi play on two physical Android devices; routers with client isolation enabled can block device-to-device traffic. The prototype uses generated meshes and Unity's built-in Standard shader so it does not depend on paid assets.
