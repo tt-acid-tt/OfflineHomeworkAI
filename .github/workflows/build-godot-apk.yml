@@ -1,0 +1,63 @@
+name: Build AFTERMATH Godot Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "godot_game/**"
+      - ".github/workflows/build-godot-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Export Godot Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.4.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x /tmp/godot-bin/Godot_v4.4.1-stable_linux.x86_64
+          sudo mv /tmp/godot-bin/Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
+          curl -fL --retry 3 -o /tmp/godot-templates.tpz "https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          unzip -q /tmp/godot-templates.tpz -d /tmp/godot-template-files
+          cp -R /tmp/godot-template-files/templates/. "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+
+      - name: Set up Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find "$SDK_ROOT" -name sdkmanager -type f 2>/dev/null | head -n 1)"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          fi
+
+      - name: Import and validate project
+        run: |
+          godot --headless --editor --path godot_game --quit
+
+      - name: Export Android APK
+        run: |
+          mkdir -p godot_game/build
+          godot --headless --path godot_game --export-debug "Android" godot_game/build/AFTERMATH.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AFTERMATH-GODOT-APK
+          path: godot_game/build/AFTERMATH.apk
+          if-no-files-found: error
+          retention-days: 14
