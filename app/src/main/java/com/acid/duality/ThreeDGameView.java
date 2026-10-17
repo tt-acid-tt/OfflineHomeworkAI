@@ -423,19 +423,20 @@ public class ThreeDGameView extends GLSurfaceView {
                 box(x,.1f,z,scale*1.7f,scale,scale*1.4f,new float[]{.22f,.24f,.19f,1});
                 if(i%3==0) bush(x+1f,z-.4f,scale*1.5f);
             }
-            // Wrecked passenger aircraft: broken fuselage, torn wing, engine and scattered seats.
-            // Passenger jet silhouette with rounded-looking segmented fuselage, nose, cockpit, wing panels and painted livery.
-            box(0,1.65f,-10.5f,3.15f,2.2f,11.5f,new float[]{.61f,.63f,.58f,1});
-            box(0,1.63f,-17.1f,2.65f,1.8f,3.8f,new float[]{.67f,.68f,.62f,1});
-            box(0,1.54f,-19.0f,1.8f,1.25f,2.2f,new float[]{.7f,.71f,.65f,1});
-            box(0,2.02f,-19.45f,1.45f,.5f,.8f,new float[]{.12f,.22f,.29f,1});
-            box(0,.78f,-10.8f,1.7f,.25f,11.3f,new float[]{.18f,.26f,.29f,1});
-            box(-4.3f,1.22f,-10.4f,8.2f,.26f,2.45f,new float[]{.68f,.69f,.63f,1});
+            // Wrecked passenger jet with a rounded segmented fuselage, cockpit, wing, engines and marked emergency exit.
+            for(int seg=0;seg<12;seg++){float z=-5.7f-seg*1.02f;float taper=(seg<2?0.76f+seg*.12f:(seg>9?1.0f-(seg-9)*.16f:1.0f));float radius=1.02f*taper;box(0,1.58f,z,2.0f*radius,1.92f*radius,1.18f,new float[]{.69f,.72f,.70f,1});}
+            box(0,1.57f,-18.5f,1.18f,1.05f,1.8f,new float[]{.73f,.75f,.72f,1});
+            box(0,1.96f,-19.05f,1.05f,.48f,.72f,new float[]{.10f,.24f,.34f,1});
+            box(0,.91f,-11.3f,1.92f,.16f,10.5f,new float[]{.08f,.30f,.43f,1});
+            box(1.08f,1.45f,-8.05f,.10f,1.50f,1.0f,new float[]{.94f,.48f,.12f,1});
+            box(1.14f,1.45f,-8.05f,.08f,1.28f,.76f,new float[]{.035f,.08f,.10f,1});
+            box(0,1.22f,-10.4f,8.2f,.26f,2.45f,new float[]{.68f,.69f,.63f,1});
             box(-6.8f,1.28f,-11.7f,2.6f,.24f,1.55f,new float[]{.52f,.54f,.5f,1});
+            for(int en=0;en<2;en++){float ex=en==0?-3.0f:3.0f;box(ex,.78f,-10.4f,1.05f,.92f,1.65f,new float[]{.48f,.51f,.52f,1});box(ex,.78f,-9.53f,.78f,.70f,.12f,new float[]{.10f,.13f,.15f,1});box(ex,.78f,-9.44f,.46f,.42f,.05f,new float[]{.25f,.29f,.30f,1});}
             box(2.15f,1.0f,-8.4f,.52f,1.65f,4.3f,new float[]{.48f,.5f,.46f,1});
             box(0,2.2f,-5.0f,1.8f,.22f,1.8f,new float[]{.57f,.59f,.55f,1});
             box(-.05f,.85f,-10.3f,3.2f,.13f,10.8f,new float[]{.12f,.34f,.42f,1});
-            for(int wi=0;wi<7;wi++){float wz=-6.3f-wi*1.45f;box(-1.59f,1.92f,wz,.055f,.34f,.65f,new float[]{.10f,.27f,.36f,1});box(1.59f,1.92f,wz,.055f,.34f,.65f,new float[]{.10f,.27f,.36f,1});}
+            for(int wi=0;wi<7;wi++){float wz=-6.3f-wi*1.45f;box(-.98f,1.93f,wz,.07f,.29f,.62f,new float[]{.10f,.28f,.38f,1});box(.98f,1.93f,wz,.07f,.29f,.62f,new float[]{.10f,.28f,.38f,1});box(-1.04f,1.93f,wz,.025f,.33f,.68f,new float[]{.78f,.82f,.79f,1});box(1.04f,1.93f,wz,.025f,.33f,.68f,new float[]{.78f,.82f,.79f,1});}
             box(-3.4f,1.35f,-10.0f,1.2f,.72f,1.0f,new float[]{.22f,.24f,.23f,1});box(-3.4f,.97f,-10.0f,1.3f,.12f,1.1f,new float[]{.13f,.15f,.15f,1});
             box(0,1.0f,-15.0f,2.4f,.22f,2.0f,new float[]{.58f,.6f,.55f,1});
             box(-1.1f,.75f,-5.9f,.25f,1.1f,1.8f,new float[]{.42f,.41f,.34f,1});
