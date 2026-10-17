@@ -97,8 +97,8 @@ func _input(event: InputEvent) -> void:
             move_vector = Vector2.ZERO
     elif event is InputEventScreenDrag:
         if event.index == active_touch:
-            var delta := event.position - touch_origin
-            move_vector = Vector2(clampf(delta.x / 90.0, -1, 1), clampf(delta.y / 90.0, -1, 1))
+            var drag_delta: Vector2 = event.position - touch_origin
+            move_vector = Vector2(clampf(drag_delta.x / 90.0, -1, 1), clampf(drag_delta.y / 90.0, -1, 1))
         elif not book_open and not inventory_open:
             yaw -= event.relative.x * 0.004
             pitch = clampf(pitch - event.relative.y * 0.0035, -1.0, 0.8)
