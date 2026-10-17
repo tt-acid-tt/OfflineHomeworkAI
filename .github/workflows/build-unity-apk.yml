@@ -1,0 +1,37 @@
+name: Build AFTERMATH Unity Android APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'unity_game/**'
+      - '.github/workflows/build-unity-apk.yml'
+jobs:
+  build:
+    name: Build Unity 6 Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Build Android APK
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity_game
+          unityVersion: 6000.0.40f1
+          targetPlatform: Android
+          buildsPath: build
+          buildName: AFTERMATH.apk
+          androidAppBundle: false
+          allowDirtyBuild: true
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AFTERMATH-UNITY-APK
+          path: build/Android/AFTERMATH.apk
+          if-no-files-found: error
+          retention-days: 14
