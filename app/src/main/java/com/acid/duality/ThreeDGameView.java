@@ -404,8 +404,9 @@ public class ThreeDGameView extends GLSurfaceView {
             if(g.screen==3){
                 g.sceneTime+=.025f;
                 if(g.sceneTime>=15.0f){g.screen=2;g.transitionAlpha=1f;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;g.notice="Ты очнулся у места крушения. Осмотрись и выживи.";g.speak("Мы потерпели крушение. Нужно выбраться наружу и найти безопасное место.");g.sound(ToneGenerator.TONE_PROP_BEEP,260);g.hud.invalidate();}
-            if(g.screen==2 && g.transitionAlpha>0f) g.transitionAlpha=Math.max(0f,g.transitionAlpha-.018f);
             }
+            // Fade the HUD overlay after the cutscene has switched to gameplay.
+            if(g.screen==2 && g.transitionAlpha>0f) g.transitionAlpha=Math.max(0f,g.transitionAlpha-.018f);
             if(g.screen==3 && g.started) g.packetTick();
             if(g.screen==2 && g.started){
                 float speed=.030f,sy=g.stickY,sx=g.stickX;
