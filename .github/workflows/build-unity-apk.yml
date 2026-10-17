@@ -43,7 +43,7 @@ jobs:
           unityVersion: 6000.0.40f1
           targetPlatform: Android
           buildsPath: build
-          buildName: DUALITY.apk
+          buildName: duality.apk
           androidAppBundle: false
           allowDirtyBuild: true
 
@@ -51,6 +51,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DUALITY-APK
-          path: build/Android/DUALITY.apk
+          path: build/Android/duality.apk
           if-no-files-found: error
           retention-days: 14
