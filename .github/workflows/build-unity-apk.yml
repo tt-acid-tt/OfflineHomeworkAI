@@ -23,8 +23,8 @@ jobs:
 
       - name: Check Unity license configuration
         env:
-          UNITY_LICENSE: \${{ secrets.UNITY_LICENSE }}
-          UNITY_SERIAL: \${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         run: |
           if [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; then
             echo "::error::Unity license is not configured. Add UNITY_LICENSE (recommended) or UNITY_SERIAL in Settings > Secrets and variables > Actions. Unity Personal activation requires a license file."
@@ -34,10 +34,10 @@ jobs:
       - name: Build Android APK with Unity 6
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: \${{ secrets.UNITY_LICENSE }}
-          UNITY_SERIAL: \${{ secrets.UNITY_SERIAL }}
-          UNITY_EMAIL: \${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: \${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: unity_game
           unityVersion: 6000.0.40f1
