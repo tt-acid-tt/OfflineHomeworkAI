@@ -19,6 +19,9 @@ import android.os.SystemClock;
 import android.view.Gravity;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.speech.tts.TextToSpeech;
+import android.media.ToneGenerator;
+import android.media.AudioManager;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -34,6 +37,12 @@ public class ThreeDGameView extends GLSurfaceView {
     volatile int blueprintType=0;
     volatile float dayClock=0f;
     volatile float chopAnim=0f;
+    volatile float transitionAlpha=0f;
+    volatile int nearBlueprintIndex=-1;
+    final boolean[] placedTypes=new boolean[6], filledTypes=new boolean[6];
+    final float[] placedX=new float[6], placedZ=new float[6];
+    TextToSpeech voice;
+    ToneGenerator tones;
     final boolean[] builtTypes=new boolean[6];
     final float[] buildX=new float[6], buildZ=new float[6];
     volatile float campfireX=0,campfireZ=0, shelterX=0,shelterZ=0;
@@ -57,6 +66,8 @@ public class ThreeDGameView extends GLSurfaceView {
         super(context);
         setEGLContextClientVersion(2);
         setPreserveEGLContextOnPause(true);
+        try { tones=new ToneGenerator(AudioManager.STREAM_MUSIC,65); } catch(Exception ignored) {}
+        voice=new TextToSpeech(context, status -> { if(status==TextToSpeech.SUCCESS) voice.setLanguage(new Locale("ru","RU")); });
         renderer=new World(this);
         setRenderer(renderer);
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
@@ -75,25 +86,25 @@ public class ThreeDGameView extends GLSurfaceView {
     }
     void beginSolo() {
         lan.close(); solo=true; started=true; screen=3; stage=0; ready=false; moves=0;
-        playerX=0; playerZ=0; yaw=0; pitch=0; sceneTime=0; stickX=stickY=0;
+        playerX=0; playerZ=0; yaw=0; pitch=0; sceneTime=0; stickX=stickY=0; dayClock=0f; transitionAlpha=0f;
         notice="Крушение. Очнись и выберись из самолёта.";
+        speak("Рейс четыреста семнадцать. Пожалуйста, пристегните ремни. Мы начинаем снижение.");
         hud.invalidate();
     }
+    void speak(String line) { try { if(voice!=null) voice.speak(line,TextToSpeech.QUEUE_FLUSH,null,"duality_voice"); } catch(Exception ignored) {} }
+    void sound(int tone,int duration) { try { if(tones!=null) tones.startTone(tone,duration); } catch(Exception ignored) {} }
     void startOnlineGame() {
         if(lan.hosting && lan.connected) { started=true; screen=3; stage=0; ready=false; playerX=0;playerZ=0;yaw=0;pitch=0;sceneTime=0;notice="Крушение. Выживайте вместе."; }
         hud.invalidate();
     }
     void placeBlueprint() {
         if(screen!=2 || !blueprintMode) return;
-        int[] needWood={3,4,3,2,6,8}; int[] needScrap={1,1,1,0,2,3};
-        if(wood<needWood[blueprintType] || scrap<needScrap[blueprintType]) { notice="Не хватает ресурсов для: "+(new String[]{"костра","фундамента","стены","потолка","дверного проёма","укрытия"})[blueprintType]; hud.invalidate(); return; }
-        wood-=needWood[blueprintType]; scrap-=needScrap[blueprintType];
         float bx=playerX+(float)Math.sin(yaw)*3.0f,bz=playerZ-(float)Math.cos(yaw)*3.0f;
-        builtTypes[blueprintType]=true;buildX[blueprintType]=bx;buildZ[blueprintType]=bz;
-        if(blueprintType==0){campfireBuilt=true;campfireX=bx;campfireZ=bz;}
-        else if(blueprintType==5){shelterBuilt=true;shelterX=bx;shelterZ=bz;}
+        bx=(float)Math.floor(bx/3f+0.5f)*3f; bz=(float)Math.floor(bz/2.4f+0.5f)*2.4f;
+        placedTypes[blueprintType]=true;placedX[blueprintType]=bx;placedZ[blueprintType]=bz;
         blueprintMode=false; blueprintBookOpen=false;
-        notice="Постройка размещена: "+(new String[]{"костёр","фундамент","стена","потолок","дверной проём","укрытие"})[blueprintType]; hud.invalidate();
+        notice="Чертёж оставлен на земле. Подойди к нему и нажми «ЗАПОЛНИТЬ», когда будут ресурсы.";
+        sound(ToneGenerator.TONE_PROP_ACK,120); hud.invalidate();
     }
     void skipCutscene() { if(screen==3){screen=2;sceneTime=12.1f;playerX=0;playerZ=0;yaw=0;pitch=0;stickX=stickY=0;notice="Ты очнулся у места крушения. Осмотрись и выживи.";hud.invalidate();} }
     void craftCampfire() {
@@ -107,6 +118,14 @@ public class ThreeDGameView extends GLSurfaceView {
     void selectNext() { if(screen==2 && nearInteract && !confirmed){choiceIndex=(choiceIndex+1)%4;hud.invalidate();} }
     void interact() {
         if(screen!=2 || !nearInteract) return;
+        if(nearBlueprintIndex>=0) {
+            int bi=nearBlueprintIndex; int[] nw={3,4,3,2,6,8}; int[] ns={1,1,1,0,2,3};
+            if(wood<nw[bi]||scrap<ns[bi]) { notice="Для чертежа нужно: "+nw[bi]+" дерева, "+ns[bi]+" металла."; sound(ToneGenerator.TONE_PROP_NACK,150); hud.invalidate(); return; }
+            wood-=nw[bi];scrap-=ns[bi];filledTypes[bi]=true;builtTypes[bi]=true;buildX[bi]=placedX[bi];buildZ[bi]=placedZ[bi];
+            if(bi==0){campfireBuilt=true;campfireX=buildX[bi];campfireZ=buildZ[bi];}
+            if(bi==5){shelterBuilt=true;shelterX=buildX[bi];shelterZ=buildZ[bi];}
+            placedTypes[bi]=false;notice="Чертёж заполнен — постройка готова!";sound(ToneGenerator.TONE_PROP_ACK,180);hud.invalidate();return;
+        }
         moves++;
         if(!wreckSearched && Math.abs(playerX)<3.2f && Math.abs(playerZ+8.5f)<4.0f) {
             wreckSearched=true; scrap+=2; wood++;
@@ -220,10 +239,12 @@ public class ThreeDGameView extends GLSurfaceView {
                 center(c,"ДВИЖЕНИЕ",bx,by+105,14,Color.argb(230,220,235,250),true);
                 // Look zone hint, no extra directional buttons.
                 center(c,"СВАЙП — СМОТРЕТЬ • СТИК — ИДТИ",w*.69f,h-20,Math.min(13,w*.016f),Color.argb(185,225,236,250),true);
-                if(g.nearInteract){ fill(c,w-250,h-150,w-18,h-65,24,Color.rgb(178,112,61));center(c,g.nearTreeIndex>=0?(g.treeHits[g.nearTreeIndex]>=3?"СОБРАТЬ БРЁВНА":(g.axeTaken?"РУБИТЬ ДЕРЕВО":"НУЖЕН ТОПОР")):(!g.axeTaken?"ВЗЯТЬ ТОПОР":"ОБЫСКАТЬ ОБЛОМКИ"),w-134,h-100,Math.min(18,w*.023f),Color.rgb(20,18,12),true); }
+                if(g.nearInteract){ fill(c,w-285,h-150,w-18,h-65,24,Color.rgb(178,112,61));String act=g.nearBlueprintIndex>=0?"ЗАПОЛНИТЬ ЧЕРТЁЖ":g.nearTreeIndex>=0?(g.treeHits[g.nearTreeIndex]>=3?"СОБРАТЬ БРЁВНА":(g.axeTaken?"РУБИТЬ ДЕРЕВО":"НУЖЕН ИНСТРУМЕНТ")):(!g.axeTaken?"ВЗЯТЬ ПРЕДМЕТ":"ОБЫСКАТЬ ОБЛОМКИ");center(c,act,w-151,h-100,Math.min(18,w*.023f),Color.rgb(20,18,12),true); }
                 if(!g.notice.isEmpty()) text(c,g.notice,Math.max(18,w*.22f),h*.94f,Math.min(16,w*.021f),Color.rgb(232,222,199),true);
                 if(g.blueprintBookOpen) drawBlueprintBook(c,w,h);
                 if(g.inventoryOpen) drawInventory(c,w,h);
+                if(g.blueprintMode){fill(c,w-270,h-230,w-18,h-165,20,Color.rgb(52,224,190));center(c,"ПОСТАВИТЬ ЧЕРТЁЖ",w-144,h-190,Math.min(18,w*.022f),Color.rgb(5,22,25),true);center(c,"Свайп — повернуть камеру",w-144,h-172,Math.min(13,w*.016f),Color.rgb(5,22,25),false);}
+                if(g.transitionAlpha>0f){fill(c,0,0,w,h,0,Color.argb((int)(255*g.transitionAlpha),0,0,0));}
             }
             postInvalidateDelayed(50);
         }
@@ -249,7 +270,14 @@ public class ThreeDGameView extends GLSurfaceView {
             fill(c,w*.67f,h*.82f,w*.82f,h*.875f,14,Color.rgb(70,255,214));center(c,"ВЫБРАТЬ",w*.745f,h*.855f,Math.min(16,w*.02f),Color.rgb(4,20,31),true);
             fill(c,w*.17f,h*.82f,w*.29f,h*.875f,14,Color.rgb(78,67,51));center(c,"ЗАКРЫТЬ",w*.23f,h*.855f,Math.min(15,w*.019f),Color.WHITE,true);
         }
-        void drawInventory(Canvas c,float w,float h){fill(c,w*.24f,h*.19f,w*.76f,h*.81f,24,Color.argb(245,22,29,24));stroke(c,w*.24f,h*.19f,w*.76f,h*.81f,24,Color.rgb(170,145,99),3);center(c,"ИНВЕНТАРЬ",w*.5f,h*.27f,Math.min(28,w*.037f),Color.rgb(236,222,190),true);text(c,"Дерево: "+g.wood,w*.31f,h*.38f,Math.min(22,w*.029f),Color.rgb(225,221,199),true);text(c,"Металл: "+g.scrap,w*.31f,h*.46f,Math.min(22,w*.029f),Color.rgb(225,221,199),true);text(c,"Топор: "+(g.axeTaken?"есть":"не найден"),w*.31f,h*.54f,Math.min(22,w*.029f),Color.rgb(225,221,199),true);text(c,"Костёр: "+(g.campfireBuilt?"построен":"не построен"),w*.31f,h*.62f,Math.min(22,w*.029f),Color.rgb(225,221,199),true);fill(c,w*.40f,h*.70f,w*.60f,h*.77f,15,Color.rgb(70,255,214));center(c,"ЗАКРЫТЬ",w*.5f,h*.745f,17,Color.rgb(4,20,31),true);}
+        void drawInventory(Canvas c,float w,float h){
+            fill(c,w*.10f,h*.10f,w*.90f,h*.90f,24,Color.argb(248,21,28,25));stroke(c,w*.10f,h*.10f,w*.90f,h*.90f,24,Color.rgb(170,145,99),3);
+            center(c,"РЮКЗАК • ДОБЫЧА И СНАРЯЖЕНИЕ",w*.5f,h*.18f,Math.min(28,w*.035f),Color.rgb(236,222,190),true);
+            String[] names={"ДЕРЕВО","МЕТАЛЛ","ИНСТРУМЕНТ","ПОСТРОЙКИ"};String[] values={""+g.wood,""+g.scrap,g.axeTaken?"найден":"не найден",g.campfireBuilt?"костёр готов":"чертежи доступны"};int[] cols={Color.rgb(150,94,49),Color.rgb(125,150,158),Color.rgb(186,164,111),Color.rgb(85,180,151)};
+            for(int i=0;i<4;i++){float x=w*.15f+i*w*.175f;fill(c,x,h*.27f,x+w*.15f,h*.65f,16,Color.rgb(40,48,41));stroke(c,x,h*.27f,x+w*.15f,h*.65f,16,Color.rgb(96,110,89),2);fill(c,x+w*.035f,h*.32f,x+w*.115f,h*.42f,12,cols[i]);center(c,names[i],x+w*.075f,h*.49f,Math.min(15,w*.018f),Color.rgb(229,224,205),true);center(c,values[i],x+w*.075f,h*.56f,Math.min(17,w*.02f),Color.WHITE,true);}
+            text(c,"Материалы и найденные предметы хранятся в этом рюкзаке.",w*.17f,h*.72f,Math.min(18,w*.022f),Color.rgb(192,202,185),false);
+            fill(c,w*.40f,h*.77f,w*.60f,h*.85f,15,Color.rgb(70,255,214));center(c,"ЗАКРЫТЬ",w*.5f,h*.825f,17,Color.rgb(4,20,31),true);
+        }
         void drawForestMenu(Canvas c,float w,float h){
             p.setShader(null);
             p.setColor(Color.argb(45,193,199,159));c.drawCircle(w*.82f,h*.24f,h*.105f,p);
@@ -307,8 +335,8 @@ public class ThreeDGameView extends GLSurfaceView {
                     if(y<90&&x>w-285){g.craftCampfire();return true;}
                     if(y>=90&&y<160&&x>w-285){g.blueprintBookOpen=true;g.blueprintMode=false;g.hud.invalidate();return true;}
                     if(y>=165&&y<225&&x>w-340){g.inventoryOpen=true;g.hud.invalidate();return true;}
-                    if(g.nearInteract&&y>h-155&&x>w-250){g.interact();return true;}
-                    if(g.blueprintMode && y>150 && !(x<w*.27f&&y>h*.55f)){g.placeBlueprint();return true;}
+                    if(g.nearInteract&&y>h-155&&x>w-285){g.interact();return true;}
+                    if(g.blueprintMode && x>w-285 && y>h-240 && y<h-155){g.placeBlueprint();return true;}
                     if(x<w*.27f&&y>h*.55f){stick=true;stickPointer=id;updateStick(x,y,w,h);}
                     else {look=true;lookPointer=id;}
                     return true;
@@ -358,7 +386,7 @@ public class ThreeDGameView extends GLSurfaceView {
         -0.5f,-0.5f,-0.5f,0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,-0.5f,0.5f,-0.5f,0.5f,-0.5f,-0.5f,0.5f};
         float px=0,pz=0,elapsed=0;
         final String vs="attribute vec3 aPos; uniform mat4 uMVP; uniform mat4 uModel; varying vec3 vPos; varying vec3 vWorld; void main(){vPos=aPos;vec4 wp=uModel*vec4(aPos,1.0);vWorld=wp.xyz;gl_Position=uMVP*vec4(aPos,1.0);}";
-        final String fs="precision mediump float;uniform vec4 uColor;uniform vec3 uLight;uniform vec3 uEye;varying vec3 vPos;varying vec3 vWorld;void main(){float l=0.48+0.52*max(0.0,dot(normalize(vPos+vec3(0.51)),normalize(uLight)));float shade=0.92+0.08*sin(vWorld.x*1.7+vWorld.z*0.43);vec3 base=uColor.rgb*l*shade;float fog=smoothstep(18.0,58.0,distance(vWorld,uEye));vec3 fogColor=vec3(0.12,0.16,0.14);gl_FragColor=vec4(mix(base,fogColor,fog),uColor.a);}";
+        final String fs="precision mediump float;uniform vec4 uColor;uniform vec3 uLight;uniform vec3 uEye;varying vec3 vPos;varying vec3 vWorld;void main(){float l=0.46+0.54*max(0.0,dot(normalize(vPos+vec3(0.51)),normalize(uLight)));float fog=smoothstep(30.0,82.0,distance(vWorld,uEye));vec3 base=uColor.rgb*l;float barkMask=step(0.07,uColor.r)*step(uColor.g,uColor.r)*step(uColor.b+0.02,uColor.g);float grain=sin(vWorld.y*19.0+sin(vWorld.x*5.0+vWorld.z*2.0)*1.8)*0.5+0.5;float pores=sin(vWorld.x*47.0+sin(vWorld.z*31.0))*sin(vWorld.y*13.0);vec3 bark=base*(0.66+0.38*grain+0.08*pores);float woodMask=step(0.16,uColor.r)*step(uColor.g,uColor.r)*step(uColor.b*1.25,uColor.g);float plank=sin(vWorld.z*8.0+sin(vWorld.x*1.5)*0.7)*0.5+0.5;float fibers=sin(vWorld.x*36.0+sin(vWorld.z*3.0)*2.0)*0.5+0.5;vec3 timber=base*(0.72+0.24*plank+0.12*fibers);base=mix(base,bark,barkMask*0.8);base=mix(base,timber,woodMask*0.62);float skyMask=step(0.55,uColor.b)*step(uColor.r,0.36)*step(0.30,uColor.g);float grad=clamp((vWorld.y+12.0)/48.0,0.0,1.0);float clouds=sin(vWorld.x*0.19+sin(vWorld.z*0.11))*sin(vWorld.z*0.23);vec3 sky=mix(vec3(0.82,0.70,0.50),vec3(0.20,0.49,0.79),grad);sky=mix(sky,vec3(0.92,0.94,0.95),smoothstep(0.78,0.96,clouds)*0.36);base=mix(base,sky,skyMask);vec3 fogColor=vec3(0.43,0.57,0.62);base=mix(base,fogColor,fog*(1.0-skyMask));gl_FragColor=vec4(base,uColor.a);}";
         World(ThreeDGameView game){g=game;}
         int shader(int type,String src){int s=GLES20.glCreateShader(type);GLES20.glShaderSource(s,src);GLES20.glCompileShader(s);return s;}
         @Override public void onSurfaceCreated(GL10 gl,EGLConfig cfg){
@@ -370,16 +398,17 @@ public class ThreeDGameView extends GLSurfaceView {
         @Override public void onSurfaceChanged(GL10 gl,int w,int h){GLES20.glViewport(0,0,w,h);Matrix.perspectiveM(proj,0,72,(float)w/Math.max(1,h),.1f,100);}
         @Override public void onDrawFrame(GL10 gl){
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);
-            elapsed+=.025f;g.dayClock+=.06f;g.chopAnim=Math.max(0,g.chopAnim-.035f);
+            elapsed+=.025f;g.dayClock+=.008f;g.chopAnim=Math.max(0,g.chopAnim-.035f);
             float night=(float)(.5-.5*Math.cos(g.dayClock*.035f));float daylight=1f-night;
-            GLES20.glClearColor(.025f+.10f*daylight,.035f+.15f*daylight,.055f+.13f*daylight,1);
+            GLES20.glClearColor(.28f+.18f*daylight,.48f+.20f*daylight,.68f+.20f*daylight,1);
             if(g.screen==3){
                 g.sceneTime+=.025f;
-                if(g.sceneTime>=12.0f){g.screen=2;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;g.notice="Ты очнулся у места крушения. Осмотрись и выживи.";g.hud.invalidate();}
+                if(g.sceneTime>=15.0f){g.screen=2;g.transitionAlpha=1f;g.playerX=0;g.playerZ=0;g.yaw=0;g.pitch=0;px=0;pz=0;g.notice="Ты очнулся у места крушения. Осмотрись и выживи.";g.speak("Мы потерпели крушение. Нужно выбраться наружу и найти безопасное место.");g.sound(ToneGenerator.TONE_PROP_BEEP,260);g.hud.invalidate();}
+            if(g.screen==2 && g.transitionAlpha>0f) g.transitionAlpha=Math.max(0f,g.transitionAlpha-.018f);
             }
             if(g.screen==3 && g.started) g.packetTick();
             if(g.screen==2 && g.started){
-                float speed=.045f,sy=g.stickY,sx=g.stickX;
+                float speed=.030f,sy=g.stickY,sx=g.stickX;
                 float rightX=(float)Math.cos(g.yaw),rightZ=(float)Math.sin(g.yaw);
                 float forwardX=(float)Math.sin(g.yaw),forwardZ=-(float)Math.cos(g.yaw);
                 float nx=px+(rightX*sx+forwardX*sy)*speed,nz=pz+(rightZ*sx+forwardZ*sy)*speed;
@@ -388,7 +417,8 @@ public class ThreeDGameView extends GLSurfaceView {
                 g.playerX=px;g.playerZ=pz;g.packetTick();
                 if(!g.solo&&!g.lan.hosting&&g.lan.connected) { /* state is shared through LAN packets */ }
                 g.nearTreeIndex=findNearTree(px,pz);
-                g.nearInteract=(!g.wreckSearched&&Math.abs(px)<3.2f&&Math.abs(pz+8.5f)<4.0f)||(!g.axeTaken&&Math.abs(px)<4.5f&&Math.abs(pz+7.0f)<6.0f)||g.nearTreeIndex>=0;
+                g.nearBlueprintIndex=-1; for(int bi=0;bi<6;bi++) if(g.placedTypes[bi]&&Math.abs(px-g.placedX[bi])<2.4f&&Math.abs(pz-g.placedZ[bi])<2.4f){g.nearBlueprintIndex=bi;break;}
+                g.nearInteract=(!g.wreckSearched&&Math.abs(px)<3.2f&&Math.abs(pz+8.5f)<4.0f)||(!g.axeTaken&&Math.abs(px)<4.5f&&Math.abs(pz+7.0f)<6.0f)||g.nearTreeIndex>=0||g.nearBlueprintIndex>=0;
             } else if(g.screen!=3){px=g.playerX;pz=g.playerZ;}
             float eyeY=1.66f,camX=px,camZ=pz,camYaw=g.yaw,camPitch=g.pitch;
             if(g.screen==3){
@@ -403,6 +433,8 @@ public class ThreeDGameView extends GLSurfaceView {
             Matrix.setLookAtM(view,0,camX,eyeY,camZ,tx,ty,tz,0,1,0);
             GLES20.glUseProgram(program);GLES20.glEnableVertexAttribArray(posLoc);vertices.position(0);GLES20.glVertexAttribPointer(posLoc,3,GLES20.GL_FLOAT,false,12,vertices);
             GLES20.glUniform3f(lightLoc,-.35f,.25f+daylight,.22f);GLES20.glUniform3f(eyeLoc,camX,eyeY,camZ);
+            // Gradient sky dome with procedural cloud bands.
+            box(camX,eyeY+16f,camZ,180f,90f,180f,new float[]{.16f,.42f,.72f,1});
             // Damp forest floor, moss patches, stones and dense tree lines.
             box(0,-.34f,-37,58,.6f,94,new float[]{.16f,.19f,.13f,1});
             for(int i=0;i<36;i++){
@@ -471,7 +503,7 @@ public class ThreeDGameView extends GLSurfaceView {
             if(g.screen==2 && g.started && !g.solo && g.lan.connected) remoteHero(g.peerX,g.peerZ,g.lan.hosting?new float[]{.38f,.4f,.32f,1}:new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.solo) remoteHero(0,-8,new float[]{.38f,.4f,.32f,1});
             if(g.screen==2 && g.started && g.axeTaken){float ax=camX+(float)Math.sin(camYaw)*.38f,az=camZ-(float)Math.cos(camYaw)*.38f;float swing=g.chopAnim;box(ax,eyeY-.3f,az,.07f,.7f,.07f,new float[]{.36f,.22f,.12f,1});box(ax+.15f+swing*.22f,eyeY-.05f,az-.12f,.42f,.12f,.16f,new float[]{.55f,.58f,.55f,1});}
-            if(g.blueprintMode){float bx=g.playerX+(float)Math.sin(g.yaw)*3.0f,bz=g.playerZ-(float)Math.cos(g.yaw)*3.0f;float[] guide=new float[]{.12f,.95f,.82f,.8f};
+            if(g.blueprintMode){float bx=(float)Math.floor((g.playerX+(float)Math.sin(g.yaw)*3.0f)/3f+0.5f)*3f,bz=(float)Math.floor((g.playerZ-(float)Math.cos(g.yaw)*3.0f)/2.4f+0.5f)*2.4f;float[] guide=new float[]{.12f,.95f,.82f,.8f};
                 if(g.blueprintType==0){box(bx,.16f,bz,1.0f,.06f,.18f,guide);box(bx,.16f,bz,.18f,.06f,1.0f,guide);box(bx,.45f,bz,.24f,.52f,.24f,guide);}
                 else if(g.blueprintType==1){box(bx,.08f,bz,3.0f,.08f,2.4f,guide);}
                 else if(g.blueprintType==2){box(bx,1.0f,bz,3.0f,2.0f,.16f,guide);}
@@ -479,6 +511,7 @@ public class ThreeDGameView extends GLSurfaceView {
                 else if(g.blueprintType==4){box(bx-1.0f,1.0f,bz,1.0f,2.0f,.16f,guide);box(bx+1.0f,1.0f,bz,1.0f,2.0f,.16f,guide);box(bx,1.95f,bz,1.0f,.16f,.16f,guide);}
                 else {box(bx,.07f,bz,2.8f,.05f,2.2f,guide);box(bx,1.0f,bz-1.0f,2.8f,.07f,.07f,guide);box(bx-1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx+1.35f,1.0f,bz,.07f,1.9f,.07f,guide);box(bx,2.0f,bz,3.0f,.07f,2.2f,guide);}
             }
+            for(int bt=0;bt<6;bt++)if(g.placedTypes[bt]){float bx=g.placedX[bt],bz=g.placedZ[bt];float[] wire=new float[]{.12f,.95f,.82f,.88f};if(bt==0){box(bx,.15f,bz,1.1f,.05f,.18f,wire);box(bx,.15f,bz,.18f,.05f,1.1f,wire);}else if(bt==1)box(bx,.08f,bz,3.0f,.07f,2.4f,wire);else if(bt==2)box(bx,1.0f,bz,3.0f,.05f,.16f,wire);else if(bt==3)box(bx,2.0f,bz,3.0f,.06f,2.4f,wire);else if(bt==4){box(bx-1f,1f,bz,.06f,2f,.16f,wire);box(bx+1f,1f,bz,.06f,2f,.16f,wire);box(bx,2f,bz,2f,.06f,.16f,wire);}else{box(bx,1f,bz-1f,2.8f,.05f,.07f,wire);box(bx-1.35f,1f,bz,.06f,2f,2f,wire);box(bx+1.35f,1f,bz,.06f,2f,2f,wire);box(bx,2f,bz,3f,.06f,2.2f,wire);}}
             for(int bt=1;bt<6;bt++)if(g.builtTypes[bt]){float bx=g.buildX[bt],bz=g.buildZ[bt];float[] wc=new float[]{.31f,.22f,.13f,1};
                 if(bt==1)box(bx,.08f,bz,3.0f,.14f,2.4f,wc);
                 else if(bt==2){box(bx,1.0f,bz,3.0f,2.0f,.18f,wc);for(int k=0;k<5;k++)box(bx-1.2f+k*.6f,1.0f,bz-.11f,.035f,1.8f,.02f,new float[]{.16f,.11f,.06f,1});}
@@ -511,10 +544,10 @@ public class ThreeDGameView extends GLSurfaceView {
         void tree(float x,float z,float h,int seed){
             int idx=seed<36?seed:seed-90+36;if(idx<0||idx>=g.treeHits.length)idx=Math.abs(seed)%g.treeHits.length;int hits=g.treeHits[idx];float trunk=.28f+(seed%3)*.07f;
             if(hits>=3){box(x,.17f,z,trunk*1.8f,.32f,trunk*1.8f,new float[]{.31f,.23f,.14f,1});box(x+.8f,.22f,z-.25f,2.0f,.24f,.34f,new float[]{.29f,.20f,.12f,1});box(x+1.35f,.2f,z-.3f,.45f,.22f,.28f,new float[]{.34f,.25f,.15f,1});return;}
-            float trunkH=h*.9f*(hits==2?.8f:1f);box(x,trunkH*.47f,z,trunk,trunkH,trunk,new float[]{.25f,.18f,.11f,1});
+            float trunkH=h*2.25f*(hits==2?.8f:1f);box(x,trunkH*.47f,z,trunk*1.25f,trunkH,trunk*1.25f,new float[]{.25f,.18f,.11f,1});
             for(int bark=0;bark<4;bark++){float bx=x+(bark-1.5f)*trunk*.36f;box(bx,trunkH*.48f,z-trunk*.53f,.035f,trunkH*.78f,.018f,new float[]{.13f,.095f,.055f,1});}
-            float green=.19f+(seed%4)*.025f-(hits*.025f);
-            box(x,h*.90f,z,1.65f,1.42f,1.62f,new float[]{green,.29f,.16f,1});box(x-.48f,h*1.09f,z+.2f,1.15f,1.0f,1.2f,new float[]{green*.9f,.25f,.14f,1});box(x+.48f,h*1.08f,z-.18f,1.12f,1.0f,1.17f,new float[]{green*1.05f,.31f,.17f,1});box(x,h*1.28f,z+.04f,.95f,.72f,.98f,new float[]{green*.78f,.24f,.13f,1});box(x-.22f,h*.75f,z+.34f,.88f,.58f,.92f,new float[]{green*.88f,.27f,.14f,1});box(x,h*1.0f,z,1.25f,1.05f,1.3f,new float[]{green*.94f,.28f,.15f,1});box(x+.08f,h*1.19f,z+.12f,.82f,.7f,.86f,new float[]{green*1.08f,.32f,.17f,1});
+            float canopy=h*2.05f; float green=.12f+(seed%4)*.018f-(hits*.015f);
+            box(x,canopy*.82f,z,2.3f,2.05f,2.25f,new float[]{green,.27f,.12f,1});box(x-.66f,canopy*.98f,z+.25f,1.7f,1.55f,1.72f,new float[]{green*.9f,.24f,.11f,1});box(x+.72f,canopy*.96f,z-.28f,1.72f,1.5f,1.74f,new float[]{green*1.08f,.30f,.13f,1});box(x,canopy*1.16f,z+.04f,1.45f,1.22f,1.48f,new float[]{green*.78f,.22f,.10f,1});box(x-.3f,canopy*.72f,z+.44f,1.3f,.95f,1.28f,new float[]{green*.88f,.25f,.11f,1});box(x,canopy*.98f,z,1.72f,1.5f,1.78f,new float[]{green*.94f,.28f,.12f,1});box(x+.12f,canopy*1.10f,z+.12f,1.25f,1.05f,1.3f,new float[]{green*1.08f,.32f,.13f,1});
         }
         int findNearTree(float x,float z){
             for(int i=0;i<36;i++){
@@ -536,10 +569,12 @@ public class ThreeDGameView extends GLSurfaceView {
             box(x-.24f,.31f,z+.16f,s*.65f,.34f,s*.65f,new float[]{.15f,.24f,.12f,1});
         }
         void remoteHero(float x,float z,float[] col){
-            box(x,1.0f,z,.56f,.82f,.42f,col);box(x,1.62f,z,.46f,.43f,.43f,new float[]{.83f,.91f,1,1});
-            box(x-.36f,.98f,z,.14f,.65f,.17f,col);box(x+.36f,.98f,z,.14f,.65f,.17f,col);
-            box(x-.16f,.28f,z,.18f,.52f,.21f,new float[]{.2f,.28f,.4f,1});box(x+.16f,.28f,z,.18f,.52f,.21f,new float[]{.2f,.28f,.4f,1});
-            box(x,1.03f,z-.22f,.22f,.15f,.035f,new float[]{.6f,1,.93f,1});
+            box(x,.99f,z,.58f,.78f,.34f,col);box(x,1.40f,z,.76f,.24f,.38f,col);
+            box(x,1.61f,z,.40f,.43f,.39f,new float[]{.77f,.62f,.48f,1});box(x,1.84f,z,.42f,.10f,.42f,new float[]{.12f,.10f,.09f,1});
+            box(x-.39f,1.04f,z,.18f,.64f,.22f,col);box(x+.39f,1.04f,z,.18f,.64f,.22f,col);
+            box(x-.16f,.32f,z,.22f,.57f,.25f,new float[]{.18f,.22f,.28f,1});box(x+.16f,.32f,z,.22f,.57f,.25f,new float[]{.18f,.22f,.28f,1});
+            box(x-.16f,.06f,z-.02f,.27f,.12f,.38f,new float[]{.08f,.09f,.10f,1});box(x+.16f,.06f,z-.02f,.27f,.12f,.38f,new float[]{.08f,.09f,.10f,1});
+            box(x,1.05f,z-.176f,.12f,.32f,.025f,new float[]{.12f,.18f,.20f,1});box(x-.10f,1.68f,z-.198f,.045f,.035f,.02f,new float[]{.04f,.05f,.05f,1});box(x+.10f,1.68f,z-.198f,.045f,.035f,.02f,new float[]{.04f,.05f,.05f,1});
         }
         void box(float x,float y,float z,float sx,float sy,float sz,float[] color){
             Matrix.setIdentityM(model,0);Matrix.translateM(model,0,x,y,z);Matrix.scaleM(model,0,sx,sy,sz);
