@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 27
+  productGUID: 82d89b0fbb6b49d0b239b8ed48d24db7
+  AndroidProfiler: 0
+  defaultScreenOrientation: 1
+  companyName: Acid Studio
+  productName: AFTERMATH
+  bundleVersion: 0.1
+  AndroidBundleVersionCode: 1
+  AndroidMinSdkVersion: 23
+  AndroidTargetSdkVersion: 35
+  applicationIdentifier:
+    Android: com.acid.aftermath
+  scriptingBackend:
+    Android: 1
+  AndroidTargetArchitectures: 1
+  apiCompatibilityLevelPerPlatform:
+    Android: 6
+  m_ActiveColorSpace: 0
+  usePlayerLog: 1
+  defaultIsNativeResolution: 1
+  resizableWindow: 1
+  runInBackground: 1
+  muteOtherAudioSources: 0
+  allowUnsafeCode: 0
+  useDeterministicCompilation: 0
+  stripEngineCode: 1
+  AndroidMinifyRelease: 0
+  AndroidMinifyDebug: 0
+  AndroidUseCustomKeystore: 0
+  AndroidTVCompatibility: 0
+  AndroidIsGame: 1
+  AndroidBuildApkPerCpuArchitecture: 0
+  scriptingRuntimeVersion: 1
+  activeInputHandler: 0
